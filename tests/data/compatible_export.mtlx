@@ -1,0 +1,42 @@
+<?xml version="1.0" ?>
+<materialx version="1.38" namespace="">
+  <surfacematerial name="material_ProceduralWood" type="material">
+    <input name="surfaceshader" type="surfaceshader" nodename="node_Principled BSDF_0"/>
+  </surfacematerial>
+  <standard_surface name="node_Principled BSDF_0" type="standard_surface">
+    <input name="base_color" type="color3" nodename="node_Mix (Legacy).001_0"/>
+    <input name="metalness" type="float" value="0.0"/>
+    <input name="specular_roughness" type="float" value="0.699999988079071"/>
+    <input name="specular_IOR" type="float" value="1.5"/>
+    <input name="emission_strength" type="float" value="0.0"/>
+    <input name="opacity" type="float" value="1.0"/>
+    <input name="normal" type="vector3" value="0.0, 0.0, 0.0"/>
+  </standard_surface>
+  <mix name="node_Mix (Legacy).001_0" type="mix">
+    <input name="mix" type="float" nodename="node_Math_0"/>
+    <input name="fg" type="color3" nodename="node_Mix (Legacy)_2"/>
+    <input name="bg" type="color3" nodename="node_RGB.002_6"/>
+  </mix>
+  <math name="node_Math_0" type="math">
+    <input name="out" type="float" nodename="node_Noise Texture_0" output="fac"/>
+  </math>
+  <noise3d name="node_Noise Texture_0" type="noise3d">
+    <input name="scale" type="float" value="15.0"/>
+    <input name="octaves" type="float" value="5.0"/>
+    <input name="lacunarity" type="float" value="0.5"/>
+    <input name="amplitude" type="float" value="0.0"/>
+    <input name="noisetype" type="string" value="perlin"/>
+  </noise3d>
+  <mix name="node_Mix (Legacy)_2" type="mix">
+    <input name="mix" type="float" nodename="node_Color Ramp_2"/>
+    <input name="fg" type="color3" nodename="node_RGB_3"/>
+    <input name="bg" type="color3" nodename="node_RGB.001_4"/>
+  </mix>
+  <ramp4 name="node_Color Ramp_2" type="ramp4"/>
+  <constant name="node_RGB_3" type="constant"/>
+  <constant name="node_RGB.001_4" type="constant"/>
+  <constant name="node_RGB.002_6" type="constant"/>
+  <surfacematerial name="material_MaterialX_Compatible" type="material">
+    <input name="surfaceshader" type="surfaceshader" nodename="node_Principled BSDF_0"/>
+  </surfacematerial>
+</materialx>

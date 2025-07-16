@@ -1,0 +1,15 @@
+<?xml version="1.0"?>
+<materialx version="1.38">
+  <nodegraph name="NG_dirt">
+    <input name="texcoord" type="vector2"/>
+    <noise3d name="dirt_noise" position="[texcoord.x, texcoord.y, 0.0]" scale="10.0"/>
+    <clamp name="dirt_clamp" in="dirt_noise.out" low="0.0" high="1.0"/>
+    <constant name="color_dirt1" value="0.3, 0.2, 0.1" type="color3"/>
+    <constant name="color_dirt2" value="0.5, 0.4, 0.2" type="color3"/>
+    <mix name="dirt_mix" fg="color_dirt1" bg="color_dirt2" amount="dirt_clamp.out"/>
+    <standard_surface name="dirt_surface" base_color="dirt_mix.out"/>
+  </nodegraph>
+  <surfacematerial name="dirt_mat">
+    <input name="surfaceshader" nodename="dirt_surface" type="surfaceshader"/>
+  </surfacematerial>
+</materialx> 

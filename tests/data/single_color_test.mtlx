@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<materialx version="1.38">
+  <nodegraph name="NG_single_color">
+    <constant name="red_constant" type="color3">
+      <parameter name="value" type="color3" value="1.0, 0.0, 0.0"/>
+    </constant>
+    <surfacematerial name="red_material">
+      <input name="surfaceshader" type="surfaceshader">
+        <standard_surface name="red_surface">
+          <input name="base_color" type="color3" nodename="red_constant"/>
+        </standard_surface>
+      </input>
+    </surfacematerial>
+  </nodegraph>
+  <material name="M_red">
+    <input name="surfaceshader" type="surfaceshader" nodename="NG_single_color.red_material"/>
+  </material>
+</materialx> 

@@ -1,0 +1,17 @@
+<?xml version="1.0"?>
+<materialx version="1.38">
+  <nodegraph name="NG_sky">
+    <input name="texcoord" type="vector2"/>
+    <clamp name="clamp_y" in="texcoord.y" low="0.0" high="1.0"/>
+    <ramp4 name="sky_ramp" valuein="clamp_y.out">
+      <input name="color0" value="0.0, 0.0, 0.2" type="color3"/>
+      <input name="color1" value="0.2, 0.4, 1.0" type="color3"/>
+      <input name="color2" value="0.6, 0.8, 1.0" type="color3"/>
+      <input name="color3" value="1.0, 1.0, 1.0" type="color3"/>
+    </ramp4>
+    <standard_surface name="sky_surface" base_color="sky_ramp.out"/>
+  </nodegraph>
+  <surfacematerial name="sky_mat">
+    <input name="surfaceshader" nodename="sky_surface" type="surfaceshader"/>
+  </surfacematerial>
+</materialx> 

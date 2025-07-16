@@ -1,0 +1,16 @@
+<?xml version="1.0"?>
+<materialx version="1.38">
+  <nodegraph name="NG_checkerboard">
+    <input name="texcoord" type="vector2"/>
+    <cellnoise3d name="checker_noise" position="[texcoord.x, texcoord.y, 0.0]"/>
+    <modulo name="checker_mod" in1="checker_noise.out" in2="2.0"/>
+    <ifgreater name="checker_if" in1="checker_mod.out" in2="1.0" in3="1.0" in4="0.0"/>
+    <constant name="color_white" value="1.0, 1.0, 1.0" type="color3"/>
+    <constant name="color_black" value="0.0, 0.0, 0.0" type="color3"/>
+    <mix name="checker_mix" fg="color_white" bg="color_black" amount="checker_if.out"/>
+    <standard_surface name="checker_surface" base_color="checker_mix.out"/>
+  </nodegraph>
+  <surfacematerial name="checkerboard_mat">
+    <input name="surfaceshader" nodename="checker_surface" type="surfaceshader"/>
+  </surfacematerial>
+</materialx> 

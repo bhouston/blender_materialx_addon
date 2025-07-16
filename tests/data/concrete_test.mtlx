@@ -1,0 +1,15 @@
+<?xml version="1.0"?>
+<materialx version="1.38">
+  <nodegraph name="NG_concrete">
+    <input name="texcoord" type="vector2"/>
+    <noise3d name="concrete_noise" position="[texcoord.x, texcoord.y, 0.0]" scale="15.0"/>
+    <clamp name="concrete_clamp" in="concrete_noise.out" low="0.0" high="1.0"/>
+    <constant name="color_concrete1" value="0.6, 0.6, 0.6" type="color3"/>
+    <constant name="color_concrete2" value="0.4, 0.4, 0.4" type="color3"/>
+    <mix name="concrete_mix" fg="color_concrete1" bg="color_concrete2" amount="concrete_clamp.out"/>
+    <standard_surface name="concrete_surface" base_color="concrete_mix.out"/>
+  </nodegraph>
+  <surfacematerial name="concrete_mat">
+    <input name="surfaceshader" nodename="concrete_surface" type="surfaceshader"/>
+  </surfacematerial>
+</materialx> 

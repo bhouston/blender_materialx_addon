@@ -1,0 +1,17 @@
+<?xml version="1.0"?>
+<materialx version="1.38">
+  <nodegraph name="NG_brick">
+    <input name="texcoord" type="vector2"/>
+    <cellnoise3d name="brick_noise" position="[texcoord.x, texcoord.y, 0.0]"/>
+    <modulo name="brick_mod_x" in1="texcoord.x" in2="2.0"/>
+    <modulo name="brick_mod_y" in1="texcoord.y" in2="1.0"/>
+    <ifgreater name="brick_if" in1="brick_mod_x.out" in2="1.0" in3="1.0" in4="0.0"/>
+    <constant name="color_brick" value="0.6, 0.2, 0.1" type="color3"/>
+    <constant name="color_mortar" value="0.8, 0.8, 0.8" type="color3"/>
+    <mix name="brick_mix" fg="color_brick" bg="color_mortar" amount="brick_if.out"/>
+    <standard_surface name="brick_surface" base_color="brick_mix.out"/>
+  </nodegraph>
+  <surfacematerial name="brick_mat">
+    <input name="surfaceshader" nodename="brick_surface" type="surfaceshader"/>
+  </surfacematerial>
+</materialx> 

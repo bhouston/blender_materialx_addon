@@ -1,0 +1,18 @@
+<?xml version="1.0"?>
+<materialx version="1.38">
+  <nodegraph name="NG_lava">
+    <input name="texcoord" type="vector2"/>
+    <noise3d name="lava_noise" position="[texcoord.x, texcoord.y, 0.0]" scale="5.0"/>
+    <ramp4 name="lava_ramp" valuein="lava_noise.out">
+      <input name="color0" value="0.1, 0.0, 0.0" type="color3"/>
+      <input name="color1" value="1.0, 0.3, 0.0" type="color3"/>
+      <input name="color2" value="1.0, 1.0, 0.0" type="color3"/>
+      <input name="color3" value="1.0, 1.0, 1.0" type="color3"/>
+    </ramp4>
+    <emission name="lava_emission" color="lava_ramp.out" intensity="5.0"/>
+    <standard_surface name="lava_surface" emission="lava_emission.out"/>
+  </nodegraph>
+  <surfacematerial name="lava_mat">
+    <input name="surfaceshader" nodename="lava_surface" type="surfaceshader"/>
+  </surfacematerial>
+</materialx> 
