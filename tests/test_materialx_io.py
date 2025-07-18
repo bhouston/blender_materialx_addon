@@ -14,8 +14,13 @@ if project_root not in sys.path:
 # Import the add-on's import/export functions
 data_dir = os.path.join(os.path.dirname(__file__), "data")
 print(f"Data dir: {data_dir}")
-mtlx_files = [f for f in os.listdir(data_dir) if f.endswith(".mtlx")]
-print(f"MTLX files: {mtlx_files}")
+mtlx_files = []
+for root, _, files in os.walk(data_dir):
+    for f in files:
+        if f.endswith(".mtlx"):
+            mtlx_files.append(os.path.join(root, f))
+print(f"Found {len(mtlx_files)} MTLX files.")
+
 
 # Import functions from the add-on
 from materialx_addon import importer, exporter
@@ -77,10 +82,16 @@ def test_import_export_roundtrip(mtlx_path, render_mode=True, hdri_path=None, ou
         if not imported_materials:
             print(f"[FAIL] Import failed for {mtlx_path}")
             return False
+        
+        mat = imported_materials[0]
+
+        # Check if the import resulted in an "unsupported" material
+        if mat.name.startswith("Unsupported_"):
+            print(f"[FAIL] Import of '{os.path.basename(mtlx_path)}' resulted in an unsupported material and will not be rendered.")
+            return False
+
         print("[PASS] Import succeeded")
 
-        mat = imported_materials[0]
-        
         # Print node tree of imported material for debugging
         if mat and mat.use_nodes:
             print(f"[DEBUG] Node tree for material '{mat.name}':")
@@ -134,16 +145,17 @@ def main():
     render_mode = args.render.lower() in ('true', '1', 'yes', 'on')
     render_size = args.render_size
     hdri_path = os.path.join(data_dir, "abandoned_factory_canteen_01_1k.hdr")
-    output_dir = data_dir
     all_passed = True
 
     import re
     file_filter = re.compile(args.filter) if args.filter else None
 
-    for fname in mtlx_files:
-        if file_filter and not file_filter.search(fname):
+    for mtlx_path in mtlx_files:
+        relative_path = os.path.relpath(mtlx_path, data_dir)
+        if file_filter and not file_filter.search(relative_path):
             continue
-        mtlx_path = os.path.join(data_dir, fname)
+        
+        output_dir = os.path.dirname(mtlx_path)
         passed = test_import_export_roundtrip(mtlx_path, render_mode=render_mode, hdri_path=hdri_path, output_dir=output_dir, render_size=render_size)
         if not passed:
             all_passed = False

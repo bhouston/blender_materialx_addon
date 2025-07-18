@@ -62,15 +62,28 @@ class MaterialBuilder:
         if not root_shader_mtlx_node:
             print(f"Error: Could not find a renderable root shader for material '{self._mtlx_mat.name}'")
             return bl_mat # Return the empty material
+
+        # *** ADDED VALIDATION ***
+        # 6. Validate that the root shader is a standard_surface
+        if root_shader_mtlx_node.category != 'standard_surface':
+            print(f"Error: Unsupported root shader '{root_shader_mtlx_node.category}' for material '{self._mtlx_mat.name}'. "
+                  f"This addon only supports 'standard_surface' shaders.")
+            # Create a simple "error" material instead
+            error_node = tree.nodes.new('ShaderNodeEmission')
+            error_node.inputs['Color'].default_value = (1.0, 0.0, 0.0, 1.0) # Red
+            error_node.inputs['Strength'].default_value = 1.0
+            tree.links.new(error_node.outputs['Emission'], output_node.inputs['Surface'])
+            bl_mat.name = f"Unsupported_{bl_mat.name}"
+            return bl_mat
             
-        # 6. Recursively build the node tree starting from the root shader
+        # 7. Recursively build the node tree starting from the root shader
         root_shader_bl_node = self._get_or_create_node(mh, root_shader_mtlx_node)
         
         # Check for and create UV map node if needed
         if self._is_uv_needed(mh):
             self._create_uv_map_node(mh)
 
-        # 7. Connect the root shader to the material output
+        # 8. Connect the root shader to the material output
         if root_shader_bl_node:
             shader_output_socket = self._find_shader_output(root_shader_bl_node)
             if shader_output_socket:

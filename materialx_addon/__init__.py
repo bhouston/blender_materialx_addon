@@ -163,11 +163,11 @@ def register():
         bpy.utils.register_class(cls)
     
     # Start validation handlers
-    validator.register_handlers()
+    # validator.register_handlers()
 
 def unregister():
     # Stop validation handlers
-    validator.unregister_handlers()
+    # validator.unregister_handlers()
     
     for cls in reversed(classes):
         bpy.utils.unregister_class(cls)

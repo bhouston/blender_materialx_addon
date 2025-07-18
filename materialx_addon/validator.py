@@ -9,36 +9,26 @@ import bpy
 from bpy.app.handlers import persistent
 from typing import List, Tuple, Set
 
+from . import mapping
+
 class ValidationResult:
     """Stores the result of a material validation check."""
     def __init__(self, material_name: str):
         self.material_name = material_name
         self.is_compatible = True
         self.errors: List[str] = []
+        self.incompatible_nodes: List[Tuple[str, str]] = []
 
-def is_node_type_compatible(node_type: str) -> bool:
+def is_node_type_compatible(node_bl_idname: str) -> bool:
     """
-    Checks if a Blender node type is generally compatible with MaterialX.
-    NOTE: This is a placeholder and will be replaced with a more robust
-    check that uses the new mapping system.
+    Checks if a Blender node type is compatible with MaterialX by checking
+    if it exists in the Blender-to-MaterialX mapping.
     """
-    # For now, we'll just check against the old incompatible list.
-    # This will be updated in the exporter refactor.
-    INCOMPATIBLE_BLENDER_NODES = [
-        "TEX_WAVE", "TEX_MAGIC", "TEX_CHECKER", "TEX_BRICK", "TEX_GRADIENT",
-        "TEX_SKY", "TEX_POINTDENSITY", "TEX_IES", "BSDF_TRANSPARENT",
-        "BSDF_GLASS", "BSDF_GLOSSY", "BSDF_DIFFUSE", "BSDF_TRANSLUCENT",
-        "BSDF_SUBSURFACE_SCATTERING", "BSDF_VELVET", "BSDF_TOON",
-        "BSDF_ANISOTROPIC", "BSDF_HAIR", "BSDF_HAIR_PRINCIPLED",
-        "VOLUME_ABSORPTION", "VOLUME_SCATTER", "VOLUME_PRINCIPLED",
-        "EEVEE_SPECULAR", "AMBIENT_OCCLUSION", "HOLDOUT", "DISPLACEMENT",
-        "VECTOR_DISPLACEMENT", "SCRIPT", "GROUP", "FRAME", "REROUTE"
-    ]
-    return node_type not in INCOMPATIBLE_BLENDER_NODES
+    return mapping.get_materialx_equivalent(node_bl_idname) is not None
 
 def validate_node(node) -> bool:
     """Check if a single node is MaterialX compatible."""
-    return is_node_type_compatible(node.type)
+    return is_node_type_compatible(node.bl_idname)
 
 def validate_material(material) -> ValidationResult:
     """
@@ -49,13 +39,49 @@ def validate_material(material) -> ValidationResult:
     if not material.use_nodes or not material.node_tree:
         result.is_compatible = True # No nodes, no incompatibility
         return result
-        
+
+    # Find the output node
+    output_node = None
+    for n in material.node_tree.nodes:
+        if n.type == 'OUTPUT_MATERIAL' and n.is_active_output:
+            output_node = n
+            break
+    
+    if not output_node:
+        result.is_compatible = False
+        result.errors.append("No active 'Material Output' node found.")
+        return result
+
+    # Check 1: Ensure the main surface shader is a Principled BSDF
+    surface_input = output_node.inputs.get("Surface")
+    if not surface_input.is_linked:
+        result.is_compatible = False
+        result.errors.append("'Material Output' node is not connected to a shader.")
+    else:
+        root_shader_node = surface_input.links[0].from_node
+        if root_shader_node.bl_idname != 'ShaderNodeBsdfPrincipled':
+            result.is_compatible = False
+            result.errors.append(f"Root shader is '{root_shader_node.bl_idname}', but must be 'Principled BSDF'.")
+            result.incompatible_nodes.append((root_shader_node.name, root_shader_node.type))
+
+    # Check 2: Find all other incompatible nodes in the tree
     for node in material.node_tree.nodes:
         if not validate_node(node):
             result.is_compatible = False
-            result.errors.append(f"Node '{node.name}' (type: {node.type}) is not compatible with MaterialX.")
+            error_msg = f"Node '{node.name}' (type: {node.type}) is not compatible."
+            if error_msg not in result.errors:
+                result.errors.append(error_msg)
+                result.incompatible_nodes.append((node.name, node.type))
             
     return result
+
+def is_material_compatible(material) -> bool:
+    """A quick check if a material is compatible, for UI purposes."""
+    return validate_material(material).is_compatible
+
+def get_incompatible_nodes(material) -> List[Tuple[str, str]]:
+    """Gets a list of incompatible node names and types for a material."""
+    return validate_material(material).incompatible_nodes
 
 def validate_scene():
     """

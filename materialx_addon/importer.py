@@ -49,4 +49,5 @@ def import_materialx(filepath: str, vertex_color_name: str = None):
             created_materials.append(bl_mat)
             
     print(f"Successfully created {len(created_materials)} Blender material(s).")
-    return created_materials
+    # return created_materials
+    return {'FINISHED'}

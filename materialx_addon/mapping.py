@@ -89,6 +89,56 @@ PARAMETER_MAPPING = {
     # Add more mappings as needed
 }
 
+# Reverse mapping for exporter
+BLENDER_TO_MATERIALX_NODES = {
+    "ShaderNodeBsdfPrincipled": "standard_surface",
+    "ShaderNodeEmission": "uniform_edf",
+    "ShaderNodeTexImage": "image",
+    "ShaderNodeTexNoise": "noise3d",
+    "ShaderNodeTexVoronoi": "cellnoise3d",
+    "ShaderNodeTexMusgrave": "fractal3d",
+    "ShaderNodeMath": "add",  # Default, operation will be overridden
+    "ShaderNodeMix": "mix",
+    "ShaderNodeCombineXYZ": "combine3",
+    "ShaderNodeCombineColor": "combine4",
+    "ShaderNodeSeparateXYZ": "separate3",
+    "ShaderNodeSeparateColor": "separate4",
+    "ShaderNodeRGB": "constant",
+    "ShaderNodeTexCoord": "texcoord",
+    "ShaderNodeMapping": "place2d",
+}
+
+# Reverse mapping for parameters
+BLENDER_TO_MATERIALX_PARAMS = {
+    "ShaderNodeBsdfPrincipled": {
+        "Base Color": "base_color",
+        "Roughness": "specular_roughness",
+        "Metallic": "metalness",
+        "Specular": "specular",
+        "Anisotropic": "specular_anisotropy",
+        "Sheen": "sheen",
+        "Sheen Tint": "sheen_color",
+        "Clearcoat": "coat",
+        "Clearcoat Roughness": "coat_roughness",
+        "IOR": "coat_IOR",
+        "Transmission": "transmission",
+        "Emission": "emission_color",
+    },
+     "ShaderNodeMath": {
+        "Value_001": "in1",
+        "Value_002": "in2"
+    },
+    "ShaderNodeMix": {
+        "A": "fg",
+        "B": "bg",
+        "Factor": "amount"
+    },
+    "ShaderNodeTexImage": {
+        "Image": "file"
+    }
+}
+
+
 def get_blender_node_type(materialx_category: str) -> str:
     """Returns the Blender node type for a given MaterialX node category."""
     return MATERIALX_TO_BLENDER_NODES.get(materialx_category)
@@ -96,6 +146,15 @@ def get_blender_node_type(materialx_category: str) -> str:
 def get_parameter_mapping(blender_node_idname: str) -> dict:
     """Returns the parameter name mapping for a given Blender node type."""
     return PARAMETER_MAPPING.get(blender_node_idname, {})
+
+def get_materialx_equivalent(blender_node_type: str) -> str:
+    """Returns the MaterialX node category for a given Blender node type."""
+    return BLENDER_TO_MATERIALX_NODES.get(blender_node_type)
+
+def get_materialx_param_name(blender_node_idname: str, blender_param_name: str) -> str:
+    """Returns the MaterialX parameter name for a given Blender node and parameter name."""
+    mapping = BLENDER_TO_MATERIALX_PARAMS.get(blender_node_idname, {})
+    return mapping.get(blender_param_name, blender_param_name.lower().replace(" ", "_"))
 
 def set_special_node_properties(blender_node, mtlx_node):
     """

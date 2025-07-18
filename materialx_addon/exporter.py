@@ -78,47 +78,72 @@ class MaterialXExporter:
             return None
         
         # Get MaterialX equivalent
-        materialx_type = mapping.get_materialx_equivalent(node.type)
+        materialx_type = mapping.get_materialx_equivalent(node.bl_idname)
         if not materialx_type:
-            print(f"No MaterialX equivalent for node: {node.name} ({node.type})")
+            print(f"No MaterialX equivalent for node: {node.name} ({node.bl_idname})")
             return None
         
         # Create MaterialX node
         node_name = f"node_{node.name}_{len(self.exported_nodes)}"
         materialx_node = ET.SubElement(materialx_doc, materialx_type)
         materialx_node.set("name", node_name)
-        materialx_node.set("type", materialx_type)
+        
+        # The 'type' attribute in the Mtlx node definition should be the Mtlx type,
+        # not the category tag. For instance, for a <constant> node, the type
+        # might be 'color3' or 'float'.
+        # We will need to infer this from the node's outputs.
+        # This is a simplification for now.
+        mtlx_type_val = "surfaceshader" # Default
+        if len(node.outputs) > 0:
+            # A simple inference based on the first output socket
+             mtlx_type_val = self.get_materialx_type_for_socket(node.outputs[0])
+
+        materialx_node.set("type", mtlx_type_val)
         
         # Export parameters
-        param_mapping = mapping.get_parameter_mapping(node.type)
-        
-        for blender_input_name, materialx_param_name in param_mapping.items():
-            if blender_input_name in node.inputs:
-                blender_input = node.inputs[blender_input_name]
+        for blender_input in node.inputs:
+            # Skip hidden or unavailable sockets
+            if not blender_input.enabled or blender_input.hide:
+                continue
+
+            materialx_param_name = mapping.get_materialx_param_name(node.bl_idname, blender_input.name)
+            if not materialx_param_name:
+                # This socket is not mapped, so we skip it.
+                continue
+
+            if blender_input.is_linked:
+                # Connected input - export connected node
+                link = blender_input.links[0]
+                connected_node_name = self.export_node(link.from_node, node_tree, materialx_doc)
                 
-                if blender_input.is_linked:
-                    # Connected input - export connected node
-                    link = blender_input.links[0]
-                    connected_node_name = self.export_node(link.from_node, node_tree, materialx_doc)
+                if connected_node_name:
+                    input_elem = ET.SubElement(materialx_node, "input")
+                    input_elem.set("name", materialx_param_name)
+                    input_elem.set("type", self.get_materialx_type_for_socket(blender_input))
+                    input_elem.set("nodename", connected_node_name)
                     
-                    if connected_node_name:
+                    # Handle output socket specification if needed
+                    # MaterialX infers the output type, but we can specify if it's not the default
+                    if link.from_socket.name != "Color" and link.from_socket.name != "Value" and link.from_socket.name != "BSDF":
+                        input_elem.set("output", link.from_socket.name.lower())
+            
+            else:
+                # Default value
+                if blender_input.name == "Image" and node.bl_idname == "ShaderNodeTexImage":
+                    if node.image:
+                        # Handle file path for image textures
                         input_elem = ET.SubElement(materialx_node, "input")
                         input_elem.set("name", materialx_param_name)
-                        input_elem.set("type", self.get_materialx_type_for_socket(blender_input))
-                        input_elem.set("nodename", connected_node_name)
-                        
-                        # Handle output socket specification if needed
-                        if link.from_socket.name != "Color" and link.from_socket.name != "Value":
-                            input_elem.set("output", link.from_socket.name.lower())
-                
+                        input_elem.set("type", "filename")
+                        # It is better to use relative path if possible
+                        input_elem.set("value", node.image.filepath.replace("//", ""))
                 else:
-                    # Default value
                     value = self.get_socket_value(blender_input)
                     if value is not None:
                         input_elem = ET.SubElement(materialx_node, "input")
                         input_elem.set("name", materialx_param_name)
                         input_elem.set("type", self.get_materialx_type_for_socket(blender_input))
-                        input_elem.set("value", str(value))
+                        input_elem.set("value", value)
         
         # Handle math node operation (for ShaderNodeMath and similar)
         if node.bl_idname == "ShaderNodeMath":
@@ -173,7 +198,7 @@ class MaterialXExporter:
         if blender_node.type == 'BSDF_PRINCIPLED':
             # MaterialX standard_surface has different parameter organization
             # Add any special parameter mappings here
-            pass
+            materialx_node.set("type", "surfaceshader")
             
         # Noise texture special handling
         elif blender_node.type == 'TEX_NOISE':
