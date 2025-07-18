@@ -3,7 +3,7 @@ bl_info = {
     "author": "Ben Houston (neuralsoft@gmail.com)",
     "website": "https://github.com/bhouston/blender-materialx",
     "support": "COMMUNITY",
-    "version": (1, 1, 0),  # Updated version number
+    "version": (1, 1, 3),  # Updated version number
     "blender": (4, 0, 0),
     "location": "Properties > Material",
     "description": "Export Blender materials to MaterialX format",
@@ -25,13 +25,14 @@ if addon_dir not in sys.path:
 from . import blender_materialx_exporter
 
 # Version information
-ADDON_VERSION = "1.1.0"
+ADDON_VERSION = "1.1.3"
 ADDON_NAME = "MaterialX Export"
 
 # Set up logging
 def log_message(message, level='INFO'):
     """Log message to both print and Blender's logging system"""
-    print(f"[MaterialX] {message}")
+
+    print(f"WARNING: [MaterialX] {message}")
     
     # Also log to Blender's system
     if level == 'ERROR':
