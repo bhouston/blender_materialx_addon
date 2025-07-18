@@ -33,6 +33,26 @@ cd blender-materialx-addon
 cp -r materialx_addon/ ~/blender/scripts/addons/
 ```
 
+### Method 3: Automated Installation (macOS)
+For development and testing, use the included installation script:
+
+```bash
+# Clone the repository
+git clone https://github.com/your-username/blender-materialx-addon.git
+cd blender-materialx-addon
+
+# Run the installation script
+python3 install_addon.py
+```
+
+The script will:
+- Automatically find the latest Blender installation on your system
+- Remove any existing MaterialX addon
+- Copy the current development version to Blender's addon directory
+- Provide clear feedback and error handling
+
+This is perfect for iterative development - just run the script whenever you make changes to test them in Blender!
+
 ## Usage
 
 ### Accessing the Add-on

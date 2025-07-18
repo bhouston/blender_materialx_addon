@@ -34,14 +34,14 @@ class MaterialXBuilder:
         self.root = ET.Element("materialx")
         self.root.set("version", version)
         
-        # Create nodegraph
-        self.nodegraph = ET.SubElement(self.root, "nodegraph")
-        self.nodegraph.set("name", f"NG_{material_name}")
-        
-        # Create material
+        # Create material first (outside nodegraph)
         self.material = ET.SubElement(self.root, "surfacematerial")
         self.material.set("name", material_name)
         self.material.set("type", "material")
+        
+        # Create nodegraph
+        self.nodegraph = ET.SubElement(self.root, "nodegraph")
+        self.nodegraph.set("name", material_name)
     
     def add_node(self, node_type: str, name: str, node_type_category: str = None, **params) -> str:
         """Add a node to the nodegraph."""
@@ -66,11 +66,71 @@ class MaterialXBuilder:
         return name
     
     def add_connection(self, from_node: str, from_output: str, to_node: str, to_input: str):
-        """Add a connection between nodes."""
-        connection = ET.SubElement(self.nodegraph, "connect")
-        connection.set("from", f"{from_node}.{from_output}")
-        connection.set("to", f"{to_node}.{to_input}")
+        """Add a connection between nodes using input tags with nodename."""
+        # Find the target node
+        target_node = self.nodes.get(to_node)
+        if target_node is None:
+            print(f"Warning: Target node '{to_node}' not found for connection")
+            return
+        
+        # Create input element
+        input_elem = ET.SubElement(target_node, "input")
+        input_elem.set("name", to_input)
+        
+        # Determine the appropriate type based on the input name
+        input_type = self._get_input_type(to_input)
+        input_elem.set("type", input_type)
+        input_elem.set("nodename", from_node)
+        
+        # Store connection info for later processing
         self.connections.append((from_node, from_output, to_node, to_input))
+    
+    def add_surface_shader_node(self, node_type: str, name: str, **params) -> str:
+        """Add a surface shader node outside the nodegraph."""
+        if not name:
+            name = f"{node_type}_{self.node_counter}"
+            self.node_counter += 1
+        
+        node = ET.SubElement(self.root, node_type)
+        node.set("name", name)
+        node.set("type", "surfaceshader")
+        
+        # Add parameters
+        for param_name, param_value in params.items():
+            if param_value is not None:
+                input_elem = ET.SubElement(node, "input")
+                input_elem.set("name", param_name)
+                input_elem.set("type", self._get_param_type(param_value))
+                input_elem.set("value", self._format_value(param_value))
+        
+        self.nodes[name] = node
+        return name
+    
+    def add_surface_shader_input(self, surface_node_name: str, input_name: str, input_type: str, nodegraph_name: str = None, nodename: str = None, value: str = None):
+        """Add an input to a surface shader node."""
+        surface_node = self.nodes.get(surface_node_name)
+        if surface_node is None:
+            print(f"Warning: Surface shader node '{surface_node_name}' not found")
+            return
+        
+        input_elem = ET.SubElement(surface_node, "input")
+        input_elem.set("name", input_name)
+        input_elem.set("type", input_type)
+        
+        if nodegraph_name:
+            input_elem.set("output", input_name)  # Use the input name as the output name
+            input_elem.set("nodegraph", nodegraph_name)
+        elif nodename:
+            input_elem.set("nodename", nodename)
+        elif value:
+            input_elem.set("value", value)
+    
+    def add_output(self, name: str, output_type: str, nodename: str):
+        """Add an output node to the nodegraph."""
+        output = ET.SubElement(self.nodegraph, "output")
+        output.set("name", name)
+        output.set("type", output_type)
+        output.set("nodename", nodename)
     
     def set_material_surface(self, surface_node_name: str):
         """Set the surface shader for the material."""
@@ -100,6 +160,29 @@ class MaterialXBuilder:
             return ", ".join(str(v) for v in value)
         else:
             return str(value)
+    
+    def _get_input_type(self, input_name: str) -> str:
+        """Determine the appropriate type for an input based on its name."""
+        # Map common input names to their expected types
+        type_mapping = {
+            'texcoord': 'vector2',
+            'in': 'color3',
+            'in1': 'color3',
+            'in2': 'color3',
+            'a': 'color3',
+            'b': 'color3',
+            'factor': 'float',
+            'scale': 'float',
+            'strength': 'float',
+            'amount': 'float',
+            'pivot': 'vector2',
+            'translate': 'vector2',
+            'rotate': 'float',
+            'file': 'filename',
+            'default': 'color3',
+        }
+        
+        return type_mapping.get(input_name.lower(), 'color3')
     
     def to_string(self) -> str:
         """Convert the document to a formatted XML string."""
@@ -132,47 +215,55 @@ class NodeMapper:
             'TEX_GRADIENT': NodeMapper.map_gradient_texture,
             'TEX_NOISE': NodeMapper.map_noise_texture,
             'MAPPING': NodeMapper.map_mapping,
+            'LAYER': NodeMapper.map_layer,
+            'ADD': NodeMapper.map_add,
+            'MULTIPLY': NodeMapper.map_multiply,
+            'ROUGHNESS_ANISOTROPY': NodeMapper.map_roughness_anisotropy,
+            'ARTISTIC_IOR': NodeMapper.map_artistic_ior,
         }
         return mappers.get(node_type)
     
     @staticmethod
     def map_principled_bsdf(node, builder: MaterialXBuilder, input_nodes: Dict) -> str:
         """Map Principled BSDF node to standard_surface."""
-        node_name = builder.add_node("standard_surface", f"surface_{node.name}", "surfaceshader")
+        node_name = builder.add_surface_shader_node("standard_surface", f"surface_{node.name}")
         
-        # Map inputs to standard_surface parameters
+        # Map inputs to standard_surface parameters with their types
         input_mappings = {
-            'Base Color': 'base_color',
-            'Metallic': 'metallic',
-            'Roughness': 'roughness',
-            'Specular': 'specular',
-            'IOR': 'ior',
-            'Transmission': 'transmission',
-            'Alpha': 'opacity',
-            'Normal': 'normal',
-            'Emission Color': 'emission_color',
-            'Emission Strength': 'emission',
-            'Subsurface': 'subsurface',
-            'Subsurface Radius': 'subsurface_radius',
-            'Subsurface Scale': 'subsurface_scale',
-            'Subsurface Anisotropy': 'subsurface_anisotropy',
-            'Sheen': 'sheen',
-            'Sheen Tint': 'sheen_tint',
-            'Sheen Roughness': 'sheen_roughness',
-            'Clearcoat': 'clearcoat',
-            'Clearcoat Roughness': 'clearcoat_roughness',
-            'Clearcoat IOR': 'clearcoat_ior',
-            'Clearcoat Normal': 'clearcoat_normal',
-            'Tangent': 'tangent',
-            'Anisotropic': 'anisotropic',
-            'Anisotropic Rotation': 'anisotropic_rotation',
+            'Base Color': ('base_color', 'color3'),
+            'Metallic': ('metallic', 'float'),
+            'Roughness': ('roughness', 'float'),
+            'Specular': ('specular', 'float'),
+            'IOR': ('ior', 'float'),
+            'Transmission': ('transmission', 'float'),
+            'Alpha': ('opacity', 'float'),
+            'Normal': ('normal', 'vector3'),
+            'Emission Color': ('emission_color', 'color3'),
+            'Emission Strength': ('emission', 'float'),
+            'Subsurface': ('subsurface', 'float'),
+            'Subsurface Radius': ('subsurface_radius', 'color3'),
+            'Subsurface Scale': ('subsurface_scale', 'float'),
+            'Subsurface Anisotropy': ('subsurface_anisotropy', 'float'),
+            'Sheen': ('sheen', 'float'),
+            'Sheen Tint': ('sheen_tint', 'float'),
+            'Sheen Roughness': ('sheen_roughness', 'float'),
+            'Clearcoat': ('clearcoat', 'float'),
+            'Clearcoat Roughness': ('clearcoat_roughness', 'float'),
+            'Clearcoat IOR': ('clearcoat_ior', 'float'),
+            'Clearcoat Normal': ('clearcoat_normal', 'vector3'),
+            'Tangent': ('tangent', 'vector3'),
+            'Anisotropic': ('anisotropic', 'float'),
+            'Anisotropic Rotation': ('anisotropic_rotation', 'float'),
         }
         
-        for input_name, mtlx_param in input_mappings.items():
+        for input_name, (mtlx_param, param_type) in input_mappings.items():
             if input_name in input_nodes:
-                builder.add_connection(
-                    input_nodes[input_name], "out",
-                    node_name, mtlx_param
+                # Add an output to the nodegraph for this parameter
+                builder.add_output(mtlx_param, param_type, input_nodes[input_name])
+                # Reference the nodegraph output from the surface shader
+                builder.add_surface_shader_input(
+                    node_name, mtlx_param, param_type, 
+                    nodegraph_name=builder.material_name
                 )
         
         return node_name
@@ -186,7 +277,11 @@ class NodeMapper:
         if node.image:
             image_path = node.image.filepath
             if image_path:
-                builder.add_node("image", node_name, "color3", file=image_path)
+                # Add file input
+                input_elem = ET.SubElement(builder.nodes[node_name], "input")
+                input_elem.set("name", "file")
+                input_elem.set("type", "filename")
+                input_elem.set("value", image_path)
         
         # Handle UV coordinates
         if 'Vector' in input_nodes:
@@ -263,12 +358,26 @@ class NodeMapper:
         mtlx_operation = operation_map.get(operation, 'add')
         node_name = builder.add_node(mtlx_operation, f"vector_math_{node.name}", "vector3")
         
-        # Handle inputs
-        for i, input_name in enumerate(['A', 'B']):
-            if input_name in input_nodes:
+        # Handle inputs - use correct MaterialX parameter names
+        if mtlx_operation in ['add', 'subtract', 'multiply', 'divide']:
+            # These operations use in1, in2
+            for i, input_name in enumerate(['A', 'B']):
+                if input_name in input_nodes:
+                    builder.add_connection(
+                        input_nodes[input_name], "out",
+                        node_name, f"in{i+1}"
+                    )
+        else:
+            # Other operations use different parameter names
+            if 'A' in input_nodes:
                 builder.add_connection(
-                    input_nodes[input_name], "out",
-                    node_name, f"in{i+1}" if mtlx_operation in ['add', 'subtract', 'multiply', 'divide'] else input_name.lower()
+                    input_nodes['A'], "out",
+                    node_name, "in1"
+                )
+            if 'B' in input_nodes:
+                builder.add_connection(
+                    input_nodes['B'], "out",
+                    node_name, "in2"
                 )
         
         return node_name
@@ -307,12 +416,26 @@ class NodeMapper:
         mtlx_operation = operation_map.get(operation, 'add')
         node_name = builder.add_node(mtlx_operation, f"math_{node.name}", "float")
         
-        # Handle inputs
-        for i, input_name in enumerate(['A', 'B']):
-            if input_name in input_nodes:
+        # Handle inputs - use correct MaterialX parameter names
+        if mtlx_operation in ['add', 'subtract', 'multiply', 'divide']:
+            # These operations use in1, in2
+            for i, input_name in enumerate(['A', 'B']):
+                if input_name in input_nodes:
+                    builder.add_connection(
+                        input_nodes[input_name], "out",
+                        node_name, f"in{i+1}"
+                    )
+        else:
+            # Other operations use different parameter names
+            if 'A' in input_nodes:
                 builder.add_connection(
-                    input_nodes[input_name], "out",
-                    node_name, f"in{i+1}" if mtlx_operation in ['add', 'subtract', 'multiply', 'divide'] else input_name.lower()
+                    input_nodes['A'], "out",
+                    node_name, "in1"
+                )
+            if 'B' in input_nodes:
+                builder.add_connection(
+                    input_nodes['B'], "out",
+                    node_name, "in2"
                 )
         
         return node_name
@@ -322,13 +445,24 @@ class NodeMapper:
         """Map Mix node to MaterialX mix node."""
         node_name = builder.add_node("mix", f"mix_{node.name}", "color3")
         
-        # Handle inputs
-        for input_name in ['A', 'B', 'Factor']:
-            if input_name in input_nodes:
-                builder.add_connection(
-                    input_nodes[input_name], "out",
-                    node_name, input_name.lower()
-                )
+        # Handle inputs - MaterialX mix node uses fg, bg, mix parameters
+        if 'A' in input_nodes:
+            builder.add_connection(
+                input_nodes['A'], "out",
+                node_name, "fg"
+            )
+        
+        if 'B' in input_nodes:
+            builder.add_connection(
+                input_nodes['B'], "out",
+                node_name, "bg"
+            )
+        
+        if 'Factor' in input_nodes:
+            builder.add_connection(
+                input_nodes['Factor'], "out",
+                node_name, "mix"
+            )
         
         return node_name
     
@@ -463,6 +597,111 @@ class NodeMapper:
             )
         
         return node_name
+    
+    @staticmethod
+    def map_layer(node, builder: MaterialXBuilder, input_nodes: Dict) -> str:
+        """Map Layer node to MaterialX layer node for vertical layering of BSDFs."""
+        node_name = builder.add_node("layer", f"layer_{node.name}", "bsdf")
+        
+        # Handle top BSDF
+        if 'Top' in input_nodes:
+            builder.add_connection(
+                input_nodes['Top'], "out",
+                node_name, "top"
+            )
+        
+        # Handle base BSDF
+        if 'Base' in input_nodes:
+            builder.add_connection(
+                input_nodes['Base'], "out",
+                node_name, "base"
+            )
+        
+        return node_name
+    
+    @staticmethod
+    def map_add(node, builder: MaterialXBuilder, input_nodes: Dict) -> str:
+        """Map Add node to MaterialX add node for distribution functions."""
+        node_name = builder.add_node("add", f"add_{node.name}", "bsdf")
+        
+        # Handle first input
+        if 'A' in input_nodes:
+            builder.add_connection(
+                input_nodes['A'], "out",
+                node_name, "in1"
+            )
+        
+        # Handle second input
+        if 'B' in input_nodes:
+            builder.add_connection(
+                input_nodes['B'], "out",
+                node_name, "in2"
+            )
+        
+        return node_name
+    
+    @staticmethod
+    def map_multiply(node, builder: MaterialXBuilder, input_nodes: Dict) -> str:
+        """Map Multiply node to MaterialX multiply node for distribution functions."""
+        node_name = builder.add_node("multiply", f"multiply_{node.name}", "bsdf")
+        
+        # Handle first input (distribution function)
+        if 'A' in input_nodes:
+            builder.add_connection(
+                input_nodes['A'], "out",
+                node_name, "in1"
+            )
+        
+        # Handle second input (scaling weight)
+        if 'B' in input_nodes:
+            builder.add_connection(
+                input_nodes['B'], "out",
+                node_name, "in2"
+            )
+        
+        return node_name
+    
+    @staticmethod
+    def map_roughness_anisotropy(node, builder: MaterialXBuilder, input_nodes: Dict) -> str:
+        """Map Roughness Anisotropy node to MaterialX roughness_anisotropy utility node."""
+        node_name = builder.add_node("roughness_anisotropy", f"roughness_anisotropy_{node.name}", "vector2")
+        
+        # Handle roughness input
+        if 'Roughness' in input_nodes:
+            builder.add_connection(
+                input_nodes['Roughness'], "out",
+                node_name, "roughness"
+            )
+        
+        # Handle anisotropy input
+        if 'Anisotropy' in input_nodes:
+            builder.add_connection(
+                input_nodes['Anisotropy'], "out",
+                node_name, "anisotropy"
+            )
+        
+        return node_name
+    
+    @staticmethod
+    def map_artistic_ior(node, builder: MaterialXBuilder, input_nodes: Dict) -> str:
+        """Map Artistic IOR node to MaterialX artistic_ior utility node."""
+        node_name = builder.add_node("artistic_ior", f"artistic_ior_{node.name}", "vector3")
+        
+        # Handle reflectivity input
+        if 'Reflectivity' in input_nodes:
+            builder.add_connection(
+                input_nodes['Reflectivity'], "out",
+                node_name, "reflectivity"
+            )
+        
+        # Handle edge color input
+        if 'Edge Color' in input_nodes:
+            builder.add_connection(
+                input_nodes['Edge Color'], "out",
+                node_name, "edge_color"
+            )
+        
+        return node_name
 
 
 class MaterialXExporter:
@@ -489,6 +728,10 @@ class MaterialXExporter:
     def export(self) -> bool:
         """Export the material to MaterialX format."""
         try:
+            print(f"Starting export of material '{self.material.name}'")
+            print(f"Output path: {self.output_path}")
+            print(f"Material uses nodes: {self.material.use_nodes}")
+            
             if not self.material.use_nodes:
                 print(f"Material '{self.material.name}' does not use nodes. Creating basic material.")
                 return self._export_basic_material()
@@ -497,42 +740,68 @@ class MaterialXExporter:
             principled_node = self._find_principled_bsdf_node()
             if not principled_node:
                 print(f"No Principled BSDF node found in material '{self.material.name}'")
+                print("Available node types:")
+                for node in self.material.node_tree.nodes:
+                    print(f"  - {node.name}: {node.type}")
                 return False
+            
+            print(f"Found Principled BSDF node: {principled_node.name}")
             
             # Create MaterialX builder
             self.builder = MaterialXBuilder(self.material.name, self.materialx_version)
+            print(f"Created MaterialX builder with version {self.materialx_version}")
             
             # Export the node network
+            print("Starting node network export...")
             surface_node_name = self._export_node_network(principled_node)
+            print(f"Node network export completed. Surface node: {surface_node_name}")
             
             # Set the surface shader
             self.builder.set_material_surface(surface_node_name)
+            print("Set material surface shader")
             
             # Write the file
+            print("Writing MaterialX file...")
             self._write_file()
+            print("File written successfully")
             
             # Export textures if requested
             if self.export_textures:
+                print("Exporting textures...")
                 self._export_textures()
             
             print(f"Successfully exported material '{self.material.name}' to '{self.output_path}'")
             return True
             
         except Exception as e:
-            print(f"Error exporting material '{self.material.name}': {str(e)}")
+            import traceback
+            print(f"ERROR: Failed to export material '{self.material.name}'")
+            print(f"Error type: {type(e).__name__}")
+            print(f"Error message: {str(e)}")
+            print("Full traceback:")
+            traceback.print_exc()
             return False
     
     def _export_basic_material(self) -> bool:
         """Export a basic material without nodes."""
         self.builder = MaterialXBuilder(self.material.name, self.materialx_version)
         
-        # Create a basic standard_surface shader
-        surface_node = self.builder.add_node("standard_surface", "surface_basic", "surfaceshader",
-                                           base_color=[self.material.diffuse_color[0],
-                                                     self.material.diffuse_color[1],
-                                                     self.material.diffuse_color[2]],
-                                           roughness=self.material.roughness,
-                                           metallic=self.material.metallic)
+        # Create a basic standard_surface shader outside the nodegraph
+        surface_node = self.builder.add_surface_shader_node("standard_surface", "surface_basic")
+        
+        # Add inputs with values directly
+        self.builder.add_surface_shader_input(
+            surface_node, "base_color", "color3",
+            value=f"{self.material.diffuse_color[0]}, {self.material.diffuse_color[1]}, {self.material.diffuse_color[2]}"
+        )
+        self.builder.add_surface_shader_input(
+            surface_node, "roughness", "float",
+            value=str(self.material.roughness)
+        )
+        self.builder.add_surface_shader_input(
+            surface_node, "metallic", "float",
+            value=str(self.material.metallic)
+        )
         
         self.builder.set_material_surface(surface_node)
         self._write_file()
@@ -547,15 +816,31 @@ class MaterialXExporter:
     
     def _export_node_network(self, output_node: bpy.types.Node) -> str:
         """Export the node network starting from the output node."""
+        print(f"Building dependencies for node: {output_node.name} ({output_node.type})")
+        
         # Traverse the network and build dependencies
         dependencies = self._build_dependencies(output_node)
+        print(f"Found {len(dependencies)} nodes in dependency order:")
+        for i, node in enumerate(dependencies):
+            print(f"  {i+1}. {node.name} ({node.type})")
         
         # Export nodes in dependency order
-        for node in dependencies:
+        print("Exporting nodes in dependency order...")
+        for i, node in enumerate(dependencies):
             if node not in self.exported_nodes:
-                self._export_node(node)
+                print(f"Exporting node {i+1}/{len(dependencies)}: {node.name} ({node.type})")
+                try:
+                    self._export_node(node)
+                    print(f"  ✓ Successfully exported {node.name}")
+                except Exception as e:
+                    print(f"  ✗ Failed to export {node.name}: {str(e)}")
+                    raise
+            else:
+                print(f"Skipping already exported node: {node.name}")
         
-        return self.exported_nodes[output_node]
+        result = self.exported_nodes[output_node]
+        print(f"Node network export completed. Final surface node: {result}")
+        return result
     
     def _build_dependencies(self, output_node: bpy.types.Node) -> List[bpy.types.Node]:
         """Build a list of nodes in dependency order."""
@@ -580,11 +865,16 @@ class MaterialXExporter:
     
     def _export_node(self, node: bpy.types.Node) -> str:
         """Export a single node."""
+        print(f"  Processing node: {node.name} (type: {node.type})")
+        
         # Get the mapper for this node type
         mapper = NodeMapper.get_node_mapper(node.type)
         if not mapper:
-            print(f"Warning: No mapper found for node type '{node.type}' ({node.name})")
+            print(f"  Warning: No mapper found for node type '{node.type}' ({node.name})")
+            print(f"  Available mappers: {list(NodeMapper.get_node_mapper.__defaults__ or [])}")
             return self._export_unknown_node(node)
+        
+        print(f"  Found mapper for {node.type}")
         
         # Build input nodes dictionary
         input_nodes = {}
@@ -592,12 +882,19 @@ class MaterialXExporter:
             if input_socket.links:
                 input_node = input_socket.links[0].from_node
                 input_nodes[input_socket.name] = self.exported_nodes.get(input_node)
+                print(f"    Input '{input_socket.name}' connected to {input_node.name}")
+        
+        print(f"  Input nodes: {list(input_nodes.keys())}")
         
         # Map the node
-        node_name = mapper(node, self.builder, input_nodes)
-        self.exported_nodes[node] = node_name
-        
-        return node_name
+        try:
+            node_name = mapper(node, self.builder, input_nodes)
+            self.exported_nodes[node] = node_name
+            print(f"  Mapped to: {node_name}")
+            return node_name
+        except Exception as e:
+            print(f"  Error in mapper for {node.type}: {str(e)}")
+            raise
     
     def _export_unknown_node(self, node: bpy.types.Node) -> str:
         """Export an unknown node type as a placeholder."""
@@ -608,12 +905,29 @@ class MaterialXExporter:
     
     def _write_file(self):
         """Write the MaterialX document to file."""
-        # Ensure output directory exists
-        self.output_path.parent.mkdir(parents=True, exist_ok=True)
-        
-        # Write the file
-        with open(self.output_path, 'w', encoding='utf-8') as f:
-            f.write(self.builder.to_string())
+        try:
+            print(f"Ensuring output directory exists: {self.output_path.parent}")
+            # Ensure output directory exists
+            self.output_path.parent.mkdir(parents=True, exist_ok=True)
+            
+            print(f"Writing MaterialX content to: {self.output_path}")
+            # Write the file
+            with open(self.output_path, 'w', encoding='utf-8') as f:
+                content = self.builder.to_string()
+                f.write(content)
+                print(f"Successfully wrote {len(content)} characters to file")
+                
+        except PermissionError as e:
+            print(f"Permission error writing file: {e}")
+            print(f"Check if you have write permissions to: {self.output_path}")
+            raise
+        except OSError as e:
+            print(f"OS error writing file: {e}")
+            print(f"Check if the path is valid: {self.output_path}")
+            raise
+        except Exception as e:
+            print(f"Unexpected error writing file: {e}")
+            raise
     
     def _export_textures(self):
         """Export texture files."""
@@ -667,8 +981,25 @@ def export_material_to_materialx(material: bpy.types.Material,
     Returns:
         bool: Success status
     """
-    exporter = MaterialXExporter(material, output_path, options)
-    return exporter.export()
+    print("=" * 50)
+    print("EXPORT_MATERIAL_TO_MATERIALX: Function called")
+    print("=" * 50)
+    print(f"Material: {material.name if material else 'None'}")
+    print(f"Output path: {output_path}")
+    print(f"Options: {options}")
+    
+    try:
+        exporter = MaterialXExporter(material, output_path, options)
+        print("MaterialXExporter instance created successfully")
+        result = exporter.export()
+        print(f"Export result: {result}")
+        return result
+    except Exception as e:
+        import traceback
+        print(f"EXCEPTION in export_material_to_materialx: {type(e).__name__}: {str(e)}")
+        print("Full traceback:")
+        traceback.print_exc()
+        return False
 
 
 def export_all_materials_to_materialx(output_directory: str, options: Dict = None) -> Dict[str, bool]:
