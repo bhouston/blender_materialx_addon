@@ -1,25 +1,21 @@
-# MaterialX Integration for Blender
+# MaterialX Export for Blender
 
-A comprehensive Blender add-on that provides seamless import/export of MaterialX files with real-time compatibility validation and workflow optimization for MaterialX-based pipelines.
+A simplified Blender add-on that exports Blender materials to MaterialX (.mtlx) format using a robust and tested exporter library.
 
 ## Features
 
-### 🔄 **Import/Export**
-- **MaterialX Import**: Convert MaterialX (.mtlx) files to Blender materials with full node graph reconstruction
-- **MaterialX Export**: Export Blender materials to industry-standard MaterialX format
-- **Bidirectional Compatibility**: Maintains material fidelity across the Blender ↔ MaterialX workflow
+### 🔄 **MaterialX Export**
+- **Single Material Export**: Export individual materials to MaterialX format
+- **Batch Export**: Export all materials in the scene at once
+- **Texture Support**: Export and copy texture files along with MaterialX files
+- **Relative Paths**: Option to use relative paths for texture references
+- **Principled BSDF Support**: Full support for Blender's Principled BSDF shader
 
-### 🔍 **Real-time Validation**
-- **Scene Validation**: Analyze entire scenes for MaterialX compatibility
-- **Material Validation**: Per-material compatibility checking with detailed feedback
-- **Node Compatibility**: Identify incompatible shader nodes before export
-- **Object Highlighting**: Visual identification of objects using incompatible materials
-
-### ⚙️ **Workflow Features**
-- **Node Filtering**: Option to hide non-MaterialX compatible nodes in shader editor
-- **Incompatible Node Highlighting**: Red outline highlighting for non-compatible shader nodes
-- **Detailed Logging**: Comprehensive error reporting during import/export operations
-- **Graceful Degradation**: Export compatible portions while logging incompatible elements
+### 🎯 **Simple & Reliable**
+- **Tested Exporter**: Uses a thoroughly tested MaterialX exporter library
+- **Clean UI**: Simple interface in the Material Properties panel
+- **Error Reporting**: Clear feedback on export success or failure
+- **No Complex Validation**: Focus on reliable export rather than complex validation
 
 ## Installation
 
@@ -27,7 +23,7 @@ A comprehensive Blender add-on that provides seamless import/export of MaterialX
 1. Download the latest release from the [Releases](../../releases) page
 2. In Blender, go to `Edit > Preferences > Add-ons`
 3. Click `Install...` and select the downloaded ZIP file
-4. Enable the "MaterialX Integration" add-on
+4. Enable the "MaterialX Export" add-on
 
 ### Method 2: Development Installation
 ```bash
@@ -44,103 +40,90 @@ The MaterialX panel is located in `Properties > Material > MaterialX`
 
 ### Basic Operations
 
-#### Export MaterialX
-1. Select objects with materials you want to export (or export all materials)
+#### Export Single Material
+1. Select a material in the Material Properties panel
 2. Click **Export MaterialX** in the MaterialX panel
 3. Choose destination file (.mtlx)
-4. Review the console for any compatibility warnings
+4. The material will be exported with all its node connections
 
-#### Import MaterialX
-1. Click **Import MaterialX** in the MaterialX panel
-2. Select a .mtlx file
-3. New materials will be created and added to your scene
+#### Export All Materials
+1. Click **Export All Materials** in the MaterialX panel
+2. Choose a destination directory
+3. All materials in the scene will be exported as separate .mtlx files
 
-#### Validate Scene
-1. Click **Validate Scene** to check all materials for MaterialX compatibility
-2. View detailed compatibility report in the console
-3. Review the MaterialX panel for per-material compatibility status
+### Export Options
 
-### Add-on Preferences
+The exporter supports several options:
+- **Export Textures**: Include texture files in the export
+- **Copy Textures**: Copy texture files to the export directory
+- **Relative Paths**: Use relative paths for texture references
 
-Access via `Edit > Preferences > Add-ons > MaterialX Integration`
+## Supported Node Types
 
-- **Filter Non-MaterialX Nodes**: Hide incompatible nodes in shader editor add menu
-- **Highlight Incompatible Nodes**: Show red outlines around non-compatible nodes
-- **Highlight Objects with Incompatible Materials**: Visual feedback in viewport
+The exporter supports a wide range of Blender nodes:
 
-## Node Compatibility
-
-### ✅ Fully Supported Nodes
+### ✅ Core Shader Nodes
 - **Principled BSDF** → `standard_surface`
-- **Emission** → `uniform_edf`
 - **Image Texture** → `image`
-- **Noise Texture** → `noise3d`
 - **Texture Coordinate** → `texcoord`
+- **RGB** → `constant`
+- **Value** → `constant`
+
+### ✅ Math & Utility Nodes
+- **Math** → `math` (add, subtract, multiply, divide, etc.)
+- **Vector Math** → `vector_math` (add, subtract, multiply, etc.)
+- **Mix** → `mix`
+- **Invert** → `invert`
+- **Separate Color** → `separate3`
+- **Combine Color** → `combine3`
+
+### ✅ Texture Nodes
+- **Checker Texture** → `checkerboard`
+- **Gradient Texture** → `ramplr`/`ramptb`
+- **Noise Texture** → `noise2d`/`noise3d`
+- **Normal Map** → `normalmap`
+- **Bump** → `bump`
 - **Mapping** → `place2d`
-- **Math** → `math`
-- **RGB/Value** → `constant`
-
-### ⚠️ Partially Supported Nodes
-- **ColorRamp** → `ramp4` (limited to 4 control points)
-- **Mix RGB** → `mix` (some blend modes not supported)
-- **Vector Math** → `vector_math` (limited operations)
-- **Voronoi Texture** → `worleynoise3d` (parameter limitations)
-- **Musgrave Texture** → `fractal3d` (some types not supported)
-
-### ❌ Unsupported Nodes
-- **Wave Texture** (no MaterialX equivalent)
-- **Magic Texture** (procedural, no equivalent)
-- **Displacement** (different MaterialX context)
-- **Legacy BSDF nodes** (use Principled BSDF instead)
-- **Volume nodes** (different MaterialX volume system)
 
 ## Technical Architecture
 
-### Core Modules
+### Core Components
 
-- **`materialx_mapping.py`**: Bidirectional node compatibility mapping system
-- **`materialx_validator.py`**: Real-time validation engine with scene analysis
-- **`materialx_exporter.py`**: MaterialX XML generation and export logic
-- **`materialx_importer.py`**: MaterialX XML parsing and material reconstruction
+- **`blender_materialx_exporter.py`**: The main exporter library with comprehensive node mapping
 - **`__init__.py`**: Blender add-on registration and UI components
 
 ### Design Principles
 
-- **Domain-driven design**: Separated concerns across focused modules
-- **Conservative compatibility**: Unknown nodes default to incompatible for pipeline safety
-- **Extensible mapping system**: Easy addition of new node types as MaterialX evolves
-- **Comprehensive error reporting**: Detailed feedback for production pipeline debugging
+- **Simplicity**: Focus on reliable export functionality
+- **Comprehensive Node Support**: Wide range of Blender nodes supported
+- **Clean MaterialX Output**: Generates standard-compliant MaterialX files
+- **Error Handling**: Graceful handling of unsupported nodes
 
 ## Example Output
 
-### Validation Report
-```
-=== MaterialX Scene Validation ===
-✓ Material 'SimpleMetal' is compatible
-✗ Material 'ProceduralWood' has issues:
-    Node 'Wave Texture' (TEX_WAVE) has no MaterialX equivalent
-    Node 'Displacement' (DISPLACEMENT) has no MaterialX equivalent
-✓ Object 'Cube' uses compatible materials
-✗ Object 'Sphere' has incompatible materials
-=== Validation Complete ===
-```
-
-### Export Log
-```
-Exporting MaterialX to: /path/to/scene.mtlx
-Found 3 materials to export
-Successfully exported 2 materials to /path/to/scene.mtlx
-
-Incompatible nodes encountered during export:
-  Material 'ProceduralWood': Wave Texture (TEX_WAVE)
-  Material 'ProceduralWood': Displacement (DISPLACEMENT)
+### MaterialX File Structure
+```xml
+<?xml version="1.0" ?>
+<materialx version="1.38">
+  <nodegraph name="NG_TestMaterial">
+    <standard_surface name="surface_Principled_BSDF" type="surfaceshader">
+      <input name="base_color" type="color3" nodename="rgb_RGB" />
+      <input name="roughness" type="float" nodename="value_Value" />
+    </standard_surface>
+    <constant name="rgb_RGB" type="color3" value="0.8, 0.2, 0.2" />
+    <constant name="value_Value" type="float" value="0.5" />
+  </nodegraph>
+  <surfacematerial name="TestMaterial" type="material">
+    <input name="surfaceshader" type="surfaceshader" nodename="surface_Principled_BSDF" />
+  </surfacematerial>
+</materialx>
 ```
 
 ## Requirements
 
 - **Blender**: 4.0 or higher
 - **Python**: 3.10+ (included with Blender)
-- **Dependencies**: xml.etree.ElementTree, mathutils (built-in)
+- **Dependencies**: xml.etree.ElementTree, pathlib (built-in)
 
 ## Contributing
 
@@ -150,24 +133,20 @@ We welcome contributions! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for guid
 ```bash
 git clone https://github.com/your-username/blender-materialx-addon.git
 cd blender-materialx-addon
-# Install development dependencies
-pip install -r requirements-dev.txt
 ```
 
-### Adding Node Support
-1. Update `BLENDER_TO_MATERIALX_MAPPING` in `materialx_mapping.py`
-2. Add parameter mappings and compatibility notes
-3. Update export/import logic if needed
-4. Add tests and update documentation
+### Testing
+```bash
+# Run the test script in Blender
+blender --python test_simplified_addon.py
+```
 
 ## Roadmap
 
-- [ ] **Advanced ColorRamp conversion** with unlimited control points
-- [ ] **Custom MaterialX node support** for pipeline-specific extensions
-- [ ] **Batch processing tools** for large scene conversion
-- [ ] **MaterialX node library browser** with drag-and-drop support
-- [ ] **Integration with MaterialX viewer** for real-time preview
-- [ ] **USD/MaterialX workflow** integration
+- [ ] **Import Functionality**: Add MaterialX import capabilities
+- [ ] **Advanced Node Support**: Support for more complex node setups
+- [ ] **MaterialX Library Integration**: Integration with MaterialX node libraries
+- [ ] **USD Workflow**: Integration with USD/MaterialX workflows
 
 ## License
 
@@ -183,7 +162,6 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 - **Issues**: Report bugs via [GitHub Issues](../../issues)
 - **Discussions**: Join conversations in [GitHub Discussions](../../discussions)
-- **Documentation**: Full docs available in the [Wiki](../../wiki)
 
 ---
 
