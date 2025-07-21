@@ -281,11 +281,16 @@ class NodeMapper:
         if node.image:
             image_path = node.image.filepath
             if image_path:
-                # Add file input
+                # Use the relative path from the .mtlx file to the texture
+                exporter = getattr(builder, 'exporter', None)
+                if exporter and image_path in exporter.texture_paths:
+                    rel_path = exporter.texture_paths[image_path]
+                else:
+                    rel_path = os.path.basename(image_path)
                 input_elem = ET.SubElement(builder.nodes[node_name], "input")
                 input_elem.set("name", "file")
                 input_elem.set("type", "filename")
-                input_elem.set("value", image_path)
+                input_elem.set("value", rel_path)
         
         # Handle UV coordinates
         if 'Vector' in input_nodes:
@@ -747,31 +752,39 @@ class MaterialXExporter:
         self.output_path = Path(output_path)
         self.options = options or {}
         self.logger = logger
-        
         # Default options
         self.active_uvmap = self.options.get('active_uvmap', 'UVMap')
         self.export_textures = self.options.get('export_textures', True)
-        self.texture_path = Path(self.options.get('texture_path', './textures'))
+        # Use texture_path option if provided, else default to '.' (same dir as .mtlx)
+        texture_path_opt = self.options.get('texture_path', '.')
+        self.texture_path = (self.output_path.parent / texture_path_opt).resolve()
         self.materialx_version = self.options.get('materialx_version', '1.38')
         self.copy_textures = self.options.get('copy_textures', True)
-        self.relative_paths = self.options.get('relative_paths', True)
-        
+        self.relative_paths = True  # Always use relative paths for this workflow
         # Internal state
         self.exported_nodes = {}
-        self.texture_paths = {}
+        self.texture_paths = {}  # Map from image absolute path to relative path used in XML
         self.builder = None
+        self.unsupported_nodes = []  # Track unsupported nodes
     
-    def export(self) -> bool:
-        """Export the material to MaterialX format."""
+    def export(self) -> dict:
+        """Export the material to MaterialX format. Returns a result dict."""
+        result = {
+            "success": False,
+            "unsupported_nodes": [],
+            "output_path": str(self.output_path),
+        }
         try:
             self.logger.info(f"Starting export of material '{self.material.name}'")
             self.logger.info(f"Output path: {self.output_path}")
             self.logger.info(f"Material uses nodes: {self.material.use_nodes}")
-            
+            # Attach exporter to builder for relative path lookup
+            MaterialXBuilder.exporter = self
             if not self.material.use_nodes:
                 self.logger.info(f"Material '{self.material.name}' does not use nodes. Creating basic material.")
-                return self._export_basic_material()
-            
+                ok = self._export_basic_material()
+                result["success"] = ok
+                return result
             # Find the Principled BSDF node
             principled_node = self._find_principled_bsdf_node()
             if not principled_node:
@@ -779,36 +792,30 @@ class MaterialXExporter:
                 self.logger.info("Available node types:")
                 for node in self.material.node_tree.nodes:
                     self.logger.info(f"  - {node.name}: {node.type}")
-                return False
-            
+                return result
             self.logger.info(f"Found Principled BSDF node: {principled_node.name}")
-            
-            # Create MaterialX builder
             self.builder = MaterialXBuilder(self.material.name, self.logger, self.materialx_version)
+            # Attach exporter to builder for relative path lookup
+            self.builder.exporter = self
             self.logger.info(f"Created MaterialX builder with version {self.materialx_version}")
-            
-            # Export the node network
             self.logger.info("Starting node network export...")
             surface_node_name = self._export_node_network(principled_node)
             self.logger.info(f"Node network export completed. Surface node: {surface_node_name}")
-            
-            # Set the surface shader
             self.builder.set_material_surface(surface_node_name)
             self.logger.info("Set material surface shader")
-            
-            # Write the file
             self.logger.info("Writing MaterialX file...")
             self._write_file()
             self.logger.info("File written successfully")
-            
-            # Export textures if requested
             if self.export_textures:
                 self.logger.info("Exporting textures...")
                 self._export_textures()
-            
-            self.logger.info(f"Successfully exported material '{self.material.name}' to '{self.output_path}'")
-            return True
-            
+            if self.unsupported_nodes:
+                result["unsupported_nodes"] = self.unsupported_nodes
+                result["success"] = False
+            else:
+                result["success"] = True
+            self.logger.info(f"Export result: {result}")
+            return result
         except Exception as e:
             import traceback
             self.logger.error(f"ERROR: Failed to export material '{self.material.name}'")
@@ -816,7 +823,7 @@ class MaterialXExporter:
             self.logger.error(f"Error message: {str(e)}")
             self.logger.error("Full traceback:")
             traceback.print_exc()
-            return False
+            return result
     
     def _export_basic_material(self) -> bool:
         """Export a basic material without nodes."""
@@ -939,7 +946,11 @@ class MaterialXExporter:
             raise
     
     def _export_unknown_node(self, node: bpy.types.Node) -> str:
-        """Export an unknown node type as a placeholder."""
+        """Export an unknown node type as a placeholder and record it."""
+        self.unsupported_nodes.append({
+            "name": node.name,
+            "type": node.type
+        })
         node_name = self.builder.add_node("constant", f"unknown_{node.name}", "color3",
                                         value=[1.0, 0.0, 1.0])  # Magenta for unknown nodes
         self.exported_nodes[node] = node_name
@@ -994,13 +1005,11 @@ class MaterialXExporter:
             self.logger.warning(f"Warning: Texture file not found: {source_path}")
             return
         
-        # Determine target path
-        if self.relative_paths:
-            target_path = self.texture_path / source_path.name
-        else:
-            target_path = self.texture_path / source_path.name
-        
-        # Copy the texture
+        # Compute relative path from .mtlx file to texture
+        rel_path = os.path.relpath(self.texture_path / source_path.name, self.output_path.parent)
+        self.texture_paths[str(image.filepath)] = rel_path
+        # Copy the texture (overwrite if exists)
+        target_path = self.texture_path / source_path.name
         if self.copy_textures:
             try:
                 shutil.copy2(source_path, target_path)
@@ -1012,17 +1021,10 @@ class MaterialXExporter:
 def export_material_to_materialx(material: bpy.types.Material, 
                                 output_path: str, 
                                 logger,
-                                options: Dict = None) -> bool:
+                                options: Dict = None) -> dict:
     """
     Export a Blender material to MaterialX format.
-    
-    Args:
-        material: Blender material object
-        output_path: Path to output .mtlx file
-        options: Export options dictionary
-    
-    Returns:
-        bool: Success status
+    Returns a dict with success, unsupported_nodes, and output_path.
     """
 
     logger.info("=" * 50)
@@ -1043,7 +1045,7 @@ def export_material_to_materialx(material: bpy.types.Material,
         logger.error(f"EXCEPTION in export_material_to_materialx: {type(e).__name__}: {str(e)}")
         logger.error("Full traceback:")
         traceback.print_exc()
-        return False
+        return {"success": False, "unsupported_nodes": [], "output_path": output_path}
 
 
 def export_all_materials_to_materialx(output_directory: str, logger, options: Dict = None) -> Dict[str, bool]:
@@ -1125,12 +1127,13 @@ def test_export():
     # Export the material
     success = export_material_to_materialx(material, "test_material.mtlx", options)
     
-    if success:
+    if success["success"]:
         logger.info("Test export successful!")
         # Clean up test material
         bpy.data.materials.remove(material)
     else:
         logger.error("Test export failed!")
+        logger.error(f"Unsupported nodes: {success['unsupported_nodes']}")
 
 
 if __name__ == "__main__":

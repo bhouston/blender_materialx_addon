@@ -76,7 +76,16 @@ See `cmdline_export.py --help` for full details.
 - Multiply → `multiply`
 - Roughness Anisotropy → `roughness_anisotropy`
 - Artistic IOR → `artistic_ior`
-- (Unknown nodes are exported as magenta constants.)
+
+## Export Results and Unsupported Nodes
+
+The exporter now returns a result object (not just True/False) with the following fields:
+
+- `success`: True if export succeeded and all nodes were supported, False otherwise.
+- `unsupported_nodes`: List of unsupported nodes encountered (each with `name` and `type`).
+- `output_path`: The path to the exported .mtlx file.
+
+If unsupported nodes are found, `success` will be False and the list will help you identify and fix all issues in one go.
 
 ## Example Output
 
