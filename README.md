@@ -1,131 +1,88 @@
 # MaterialX Export for Blender
 
-A simplified Blender add-on that exports Blender materials to MaterialX (.mtlx) format using a robust and tested exporter library.
+A Blender addon and command-line tool to export Blender materials to MaterialX (.mtlx) format, with robust node and texture support.
 
 ## Features
 
-### 🔄 **MaterialX Export**
-- **Single Material Export**: Export individual materials to MaterialX format
-- **Batch Export**: Export all materials in the scene at once
-- **Texture Support**: Export and copy texture files along with MaterialX files
-- **Relative Paths**: Option to use relative paths for texture references
-- **Principled BSDF Support**: Full support for Blender's Principled BSDF shader
-
-### 🎯 **Simple & Reliable**
-- **Tested Exporter**: Uses a thoroughly tested MaterialX exporter library
-- **Clean UI**: Simple interface in the Material Properties panel
-- **Error Reporting**: Clear feedback on export success or failure
-- **No Complex Validation**: Focus on reliable export rather than complex validation
+- **Blender Addon UI**: Export single or all materials from the Blender UI.
+- **Command-Line Export**: Export any material from any `.blend` file without opening Blender’s UI.
+- **Texture Export**: Optionally export and copy textures, with support for relative or absolute paths.
+- **Comprehensive Node Support**: See below for supported Blender node types.
+- **MaterialX 1.38 Compliance**.
 
 ## Installation
 
-### Method 1: Manual Installation
-1. Download the latest release from the [Releases](../../releases) page
-2. In Blender, go to `Edit > Preferences > Add-ons`
-3. Click `Install...` and select the downloaded ZIP file
-4. Enable the "MaterialX Export" add-on
+### Manual
 
-### Method 2: Development Installation
-```bash
-git clone https://github.com/your-username/blender-materialx-addon.git
-cd blender-materialx-addon
-# Copy to your Blender add-ons directory
-cp -r materialx_addon/ ~/blender/scripts/addons/
-```
+1. Copy the `materialx_addon/` directory to your Blender addons directory (e.g., `~/Library/Application Support/Blender/4.0/scripts/addons/` on macOS).
+2. Enable the addon in Blender: `Edit > Preferences > Add-ons`, search for "MaterialX Export".
 
-### Method 3: Automated Installation (macOS)
-For development and testing, use the included installation script:
+### Development (macOS)
+
+- Use `dev_upgrade_addon.py` to install the addon to the latest Blender version for development.
 
 ```bash
-# Clone the repository
-git clone https://github.com/your-username/blender-materialx-addon.git
-cd blender-materialx-addon
-
-# Run the installation script
-python3 install_addon.py
+python3 dev_upgrade_addon.py
 ```
-
-The script will:
-- Automatically find the latest Blender installation on your system
-- Remove any existing MaterialX addon
-- Copy the current development version to Blender's addon directory
-- Provide clear feedback and error handling
-
-This is perfect for iterative development - just run the script whenever you make changes to test them in Blender!
 
 ## Usage
 
-### Accessing the Add-on
-The MaterialX panel is located in `Properties > Material > MaterialX`
+### In Blender
 
-### Basic Operations
+- Access the MaterialX panel in `Properties > Material > MaterialX`.
+- Export the selected material or all materials.
+- Options for exporting/copying textures and using relative paths are available in the export dialogs.
 
-#### Export Single Material
-1. Select a material in the Material Properties panel
-2. Click **Export MaterialX** in the MaterialX panel
-3. Choose destination file (.mtlx)
-4. The material will be exported with all its node connections
+### Command-Line
 
-#### Export All Materials
-1. Click **Export All Materials** in the MaterialX panel
-2. Choose a destination directory
-3. All materials in the scene will be exported as separate .mtlx files
+Export a material from any `.blend` file:
 
-### Export Options
+```bash
+python cmdline_export.py <blend_file> <material_name> <output_mtlx_file> [options]
+```
 
-The exporter supports several options:
-- **Export Textures**: Include texture files in the export
-- **Copy Textures**: Copy texture files to the export directory
-- **Relative Paths**: Use relative paths for texture references
+**Options:**
+- `--export-textures` : Export texture files.
+- `--texture-path PATH` : Directory to export textures to.
+- `--version VERSION` : MaterialX version (default: 1.38).
+- `--relative-paths` : Use relative paths for textures.
+- `--copy-textures` : Copy texture files.
+- `--active-uvmap NAME` : Active UV map name.
+- `--blender-path PATH` : Path to Blender executable.
 
-## Supported Node Types
+See `cmdline_export.py --help` for full details.
 
-The exporter supports a wide range of Blender nodes:
+## Supported Blender Node Types
 
-### ✅ Core Shader Nodes
-- **Principled BSDF** → `standard_surface`
-- **Image Texture** → `image`
-- **Texture Coordinate** → `texcoord`
-- **RGB** → `constant`
-- **Value** → `constant`
-
-### ✅ Math & Utility Nodes
-- **Math** → `math` (add, subtract, multiply, divide, etc.)
-- **Vector Math** → `vector_math` (add, subtract, multiply, etc.)
-- **Mix** → `mix`
-- **Invert** → `invert`
-- **Separate Color** → `separate3`
-- **Combine Color** → `combine3`
-
-### ✅ Texture Nodes
-- **Checker Texture** → `checkerboard`
-- **Gradient Texture** → `ramplr`/`ramptb`
-- **Noise Texture** → `noise2d`/`noise3d`
-- **Normal Map** → `normalmap`
-- **Bump** → `bump`
-- **Mapping** → `place2d`
-
-## Technical Architecture
-
-### Core Components
-
-- **`blender_materialx_exporter.py`**: The main exporter library with comprehensive node mapping
-- **`__init__.py`**: Blender add-on registration and UI components
-
-### Design Principles
-
-- **Simplicity**: Focus on reliable export functionality
-- **Comprehensive Node Support**: Wide range of Blender nodes supported
-- **Clean MaterialX Output**: Generates standard-compliant MaterialX files
-- **Error Handling**: Graceful handling of unsupported nodes
+- Principled BSDF → `standard_surface`
+- Image Texture → `image`
+- Texture Coordinate → `texcoord`
+- RGB → `constant`
+- Value → `constant`
+- Math → `math`
+- Vector Math → `vector_math`
+- Mix → `mix`
+- Invert → `invert`
+- Separate Color → `separate3`
+- Combine Color → `combine3`
+- Checker Texture → `checkerboard`
+- Gradient Texture → `ramplr`/`ramptb`
+- Noise Texture → `noise2d`/`noise3d`
+- Normal Map → `normalmap`
+- Bump → `bump`
+- Mapping → `place2d`
+- Layer → `layer`
+- Add → `add`
+- Multiply → `multiply`
+- Roughness Anisotropy → `roughness_anisotropy`
+- Artistic IOR → `artistic_ior`
+- (Unknown nodes are exported as magenta constants.)
 
 ## Example Output
 
-### MaterialX File Structure
 ```xml
-<?xml version="1.0" ?>
 <materialx version="1.38">
-  <nodegraph name="NG_TestMaterial">
+  <nodegraph name="TestMaterial">
     <standard_surface name="surface_Principled_BSDF" type="surfaceshader">
       <input name="base_color" type="color3" nodename="rgb_RGB" />
       <input name="roughness" type="float" nodename="value_Value" />
@@ -143,46 +100,14 @@ The exporter supports a wide range of Blender nodes:
 
 - **Blender**: 4.0 or higher
 - **Python**: 3.10+ (included with Blender)
-- **Dependencies**: xml.etree.ElementTree, pathlib (built-in)
+- **No external dependencies** (uses Python standard library)
 
 ## Contributing
 
-We welcome contributions! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
-
-### Development Setup
-```bash
-git clone https://github.com/your-username/blender-materialx-addon.git
-cd blender-materialx-addon
-```
-
-### Testing
-```bash
-# Run the test script in Blender
-blender --python test_simplified_addon.py
-```
-
-## Roadmap
-
-- [ ] **Import Functionality**: Add MaterialX import capabilities
-- [ ] **Advanced Node Support**: Support for more complex node setups
-- [ ] **MaterialX Library Integration**: Integration with MaterialX node libraries
-- [ ] **USD Workflow**: Integration with USD/MaterialX workflows
+Contributions are welcome! Please see [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## License
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
-
-## Acknowledgments
-
-- **MaterialX Working Group** for the open standard
-- **Blender Foundation** for the extensible add-on architecture
-- **Academy Software Foundation** for MaterialX development and specification
-
-## Support
-
-- **Issues**: Report bugs via [GitHub Issues](../../issues)
-- **Discussions**: Join conversations in [GitHub Discussions](../../discussions)
+MIT License. See [LICENSE](LICENSE).
 
 ---
-
-*Built with ❤️ for the Blender and MaterialX communities*

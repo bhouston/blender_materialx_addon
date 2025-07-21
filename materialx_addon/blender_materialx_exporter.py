@@ -23,13 +23,14 @@ import math
 class MaterialXBuilder:
     """Builds MaterialX XML documents."""
     
-    def __init__(self, material_name: str, version: str = "1.38"):
+    def __init__(self, material_name: str, logger, version: str = "1.38" ):
         self.material_name = material_name
         self.version = version
         self.node_counter = 0
         self.nodes = {}
         self.connections = []
-        
+        self.logger = logger
+
         # Create root element
         self.root = ET.Element("materialx")
         self.root.set("version", version)
@@ -67,12 +68,12 @@ class MaterialXBuilder:
     
     def add_connection(self, from_node: str, from_output: str, to_node: str, to_input: str):
         """Add a connection between nodes using input tags with nodename."""
-        print(f"    *** ADDING CONNECTION: {from_node}.{from_output} -> {to_node}.{to_input} ***")
+        self.logger.debug(f"    *** ADDING CONNECTION: {from_node}.{from_output} -> {to_node}.{to_input} ***")
         
         # Find the target node
         target_node = self.nodes.get(to_node)
         if target_node is None:
-            print(f"Warning: Target node '{to_node}' not found for connection")
+            self.logger.warning(f"Warning: Target node '{to_node}' not found for connection")
             return
         
         # Create input element
@@ -86,7 +87,7 @@ class MaterialXBuilder:
         
         # Store connection info for later processing
         self.connections.append((from_node, from_output, to_node, to_input))
-        print(f"    *** CONNECTION ADDED SUCCESSFULLY ***")
+        self.logger.debug(f"    *** CONNECTION ADDED SUCCESSFULLY ***")
     
     def add_surface_shader_node(self, node_type: str, name: str, **params) -> str:
         """Add a surface shader node outside the nodegraph."""
@@ -113,7 +114,7 @@ class MaterialXBuilder:
         """Add an input to a surface shader node."""
         surface_node = self.nodes.get(surface_node_name)
         if surface_node is None:
-            print(f"Warning: Surface shader node '{surface_node_name}' not found")
+            self.logger.warning(f"Warning: Surface shader node '{surface_node_name}' not found")
             return
         
         input_elem = ET.SubElement(surface_node, "input")
@@ -424,22 +425,22 @@ class NodeMapper:
             # These operations use in1, in2
             # Use input_nodes_by_index if available to handle duplicate input names
             if input_nodes_by_index:
-                print(f"    Using input_nodes_by_index: {input_nodes_by_index}")
+                builder.logger.debug(f"    Using input_nodes_by_index: {input_nodes_by_index}")
                 if 0 in input_nodes_by_index:  # First input (A)
-                    print(f"    Adding connection from {input_nodes_by_index[0]} to {node_name}.in1")
+                    builder.logger.debug(f"    Adding connection from {input_nodes_by_index[0]} to {node_name}.in1")
                     builder.add_connection(
                         input_nodes_by_index[0], "out",
                         node_name, "in1"
                     )
                 if 1 in input_nodes_by_index:  # Second input (B)
-                    print(f"    Adding connection from {input_nodes_by_index[1]} to {node_name}.in2")
+                    builder.logger.debug(f"    Adding connection from {input_nodes_by_index[1]} to {node_name}.in2")
                     builder.add_connection(
                         input_nodes_by_index[1], "out",
                         node_name, "in2"
                     )
             else:
                 # Fallback to original method
-                print(f"    Using fallback method with input_nodes: {input_nodes}")
+                builder.logger.debug(f"    Using fallback method with input_nodes: {input_nodes}")
                 for i, input_name in enumerate(['A', 'B']):
                     if input_name in input_nodes:
                         builder.add_connection(
@@ -741,10 +742,11 @@ class NodeMapper:
 class MaterialXExporter:
     """Main MaterialX exporter class."""
     
-    def __init__(self, material: bpy.types.Material, output_path: str, options: Dict = None):
+    def __init__(self, material: bpy.types.Material, output_path: str, logger, options: Dict = None):
         self.material = material
         self.output_path = Path(output_path)
         self.options = options or {}
+        self.logger = logger
         
         # Default options
         self.active_uvmap = self.options.get('active_uvmap', 'UVMap')
@@ -762,63 +764,63 @@ class MaterialXExporter:
     def export(self) -> bool:
         """Export the material to MaterialX format."""
         try:
-            print(f"Starting export of material '{self.material.name}'")
-            print(f"Output path: {self.output_path}")
-            print(f"Material uses nodes: {self.material.use_nodes}")
+            self.logger.info(f"Starting export of material '{self.material.name}'")
+            self.logger.info(f"Output path: {self.output_path}")
+            self.logger.info(f"Material uses nodes: {self.material.use_nodes}")
             
             if not self.material.use_nodes:
-                print(f"Material '{self.material.name}' does not use nodes. Creating basic material.")
+                self.logger.info(f"Material '{self.material.name}' does not use nodes. Creating basic material.")
                 return self._export_basic_material()
             
             # Find the Principled BSDF node
             principled_node = self._find_principled_bsdf_node()
             if not principled_node:
-                print(f"No Principled BSDF node found in material '{self.material.name}'")
-                print("Available node types:")
+                self.logger.info(f"No Principled BSDF node found in material '{self.material.name}'")
+                self.logger.info("Available node types:")
                 for node in self.material.node_tree.nodes:
-                    print(f"  - {node.name}: {node.type}")
+                    self.logger.info(f"  - {node.name}: {node.type}")
                 return False
             
-            print(f"Found Principled BSDF node: {principled_node.name}")
+            self.logger.info(f"Found Principled BSDF node: {principled_node.name}")
             
             # Create MaterialX builder
-            self.builder = MaterialXBuilder(self.material.name, self.materialx_version)
-            print(f"Created MaterialX builder with version {self.materialx_version}")
+            self.builder = MaterialXBuilder(self.material.name, self.logger, self.materialx_version)
+            self.logger.info(f"Created MaterialX builder with version {self.materialx_version}")
             
             # Export the node network
-            print("Starting node network export...")
+            self.logger.info("Starting node network export...")
             surface_node_name = self._export_node_network(principled_node)
-            print(f"Node network export completed. Surface node: {surface_node_name}")
+            self.logger.info(f"Node network export completed. Surface node: {surface_node_name}")
             
             # Set the surface shader
             self.builder.set_material_surface(surface_node_name)
-            print("Set material surface shader")
+            self.logger.info("Set material surface shader")
             
             # Write the file
-            print("Writing MaterialX file...")
+            self.logger.info("Writing MaterialX file...")
             self._write_file()
-            print("File written successfully")
+            self.logger.info("File written successfully")
             
             # Export textures if requested
             if self.export_textures:
-                print("Exporting textures...")
+                self.logger.info("Exporting textures...")
                 self._export_textures()
             
-            print(f"Successfully exported material '{self.material.name}' to '{self.output_path}'")
+            self.logger.info(f"Successfully exported material '{self.material.name}' to '{self.output_path}'")
             return True
             
         except Exception as e:
             import traceback
-            print(f"ERROR: Failed to export material '{self.material.name}'")
-            print(f"Error type: {type(e).__name__}")
-            print(f"Error message: {str(e)}")
-            print("Full traceback:")
+            self.logger.error(f"ERROR: Failed to export material '{self.material.name}'")
+            self.logger.error(f"Error type: {type(e).__name__}")
+            self.logger.error(f"Error message: {str(e)}")
+            self.logger.error("Full traceback:")
             traceback.print_exc()
             return False
     
     def _export_basic_material(self) -> bool:
         """Export a basic material without nodes."""
-        self.builder = MaterialXBuilder(self.material.name, self.materialx_version)
+        self.builder = MaterialXBuilder(self.material.name, self.logger, self.materialx_version)
         
         # Create a basic standard_surface shader outside the nodegraph
         surface_node = self.builder.add_surface_shader_node("standard_surface", "surface_basic")
@@ -850,30 +852,30 @@ class MaterialXExporter:
     
     def _export_node_network(self, output_node: bpy.types.Node) -> str:
         """Export the node network starting from the output node."""
-        print(f"Building dependencies for node: {output_node.name} ({output_node.type})")
+        self.logger.info(f"Building dependencies for node: {output_node.name} ({output_node.type})")
         
         # Traverse the network and build dependencies
         dependencies = self._build_dependencies(output_node)
-        print(f"Found {len(dependencies)} nodes in dependency order:")
+        self.logger.info(f"Found {len(dependencies)} nodes in dependency order:")
         for i, node in enumerate(dependencies):
-            print(f"  {i+1}. {node.name} ({node.type})")
+            self.logger.info(f"  {i+1}. {node.name} ({node.type})")
         
         # Export nodes in dependency order
-        print("Exporting nodes in dependency order...")
+        self.logger.info("Exporting nodes in dependency order...")
         for i, node in enumerate(dependencies):
             if node not in self.exported_nodes:
-                print(f"Exporting node {i+1}/{len(dependencies)}: {node.name} ({node.type})")
+                self.logger.info(f"Exporting node {i+1}/{len(dependencies)}: {node.name} ({node.type})")
                 try:
                     self._export_node(node)
-                    print(f"  ✓ Successfully exported {node.name}")
+                    self.logger.info(f"  ✓ Successfully exported {node.name}")
                 except Exception as e:
-                    print(f"  ✗ Failed to export {node.name}: {str(e)}")
+                    self.logger.error(f"  ✗ Failed to export {node.name}: {str(e)}")
                     raise
             else:
-                print(f"Skipping already exported node: {node.name}")
+                self.logger.info(f"Skipping already exported node: {node.name}")
         
         result = self.exported_nodes[output_node]
-        print(f"Node network export completed. Final surface node: {result}")
+        self.logger.info(f"Node network export completed. Final surface node: {result}")
         return result
     
     def _build_dependencies(self, output_node: bpy.types.Node) -> List[bpy.types.Node]:
@@ -899,17 +901,17 @@ class MaterialXExporter:
     
     def _export_node(self, node: bpy.types.Node) -> str:
         """Export a single node."""
-        print(f"  Processing node: {node.name} (type: {node.type})")
-        print(f"  *** ENTERING _export_node for {node.name} ***")
+        self.logger.info(f"  Processing node: {node.name} (type: {node.type})")
+        self.logger.info(f"  *** ENTERING _export_node for {node.name} ***")
         
         # Get the mapper for this node type
         mapper = NodeMapper.get_node_mapper(node.type)
         if not mapper:
-            print(f"  Warning: No mapper found for node type '{node.type}' ({node.name})")
-            print(f"  Available mappers: {list(NodeMapper.get_node_mapper.__defaults__ or [])}")
+            self.logger.warning(f"  Warning: No mapper found for node type '{node.type}' ({node.name})")
+            self.logger.warning(f"  Available mappers: {list(NodeMapper.get_node_mapper.__defaults__ or [])}")
             return self._export_unknown_node(node)
         
-        print(f"  Found mapper for {node.type}")
+        self.logger.info(f"  Found mapper for {node.type}")
         
         # Build input nodes dictionary - handle duplicate input names
         input_nodes = {}
@@ -919,21 +921,21 @@ class MaterialXExporter:
                 input_node = input_socket.links[0].from_node
                 input_nodes[input_socket.name] = self.exported_nodes.get(input_node)
                 input_nodes_by_index[i] = self.exported_nodes.get(input_node)
-                print(f"    Input {i} '{input_socket.name}' connected to {input_node.name}")
+                self.logger.info(f"    Input {i} '{input_socket.name}' connected to {input_node.name}")
         
-        print(f"  Input nodes: {list(input_nodes.keys())}")
-        print(f"  Input nodes by index: {list(input_nodes_by_index.keys())}")
-        print(f"  Input nodes by index values: {input_nodes_by_index}")
-        print(f"  *** DEBUG: Node {node.name} has {len(input_nodes_by_index)} indexed inputs ***")
+        self.logger.info(f"  Input nodes: {list(input_nodes.keys())}")
+        self.logger.info(f"  Input nodes by index: {list(input_nodes_by_index.keys())}")
+        self.logger.info(f"  Input nodes by index values: {input_nodes_by_index}")
+        self.logger.info(f"  *** DEBUG: Node {node.name} has {len(input_nodes_by_index)} indexed inputs ***")
         
         # Map the node
         try:
             node_name = mapper(node, self.builder, input_nodes, input_nodes_by_index)
             self.exported_nodes[node] = node_name
-            print(f"  Mapped to: {node_name}")
+            self.logger.info(f"  Mapped to: {node_name}")
             return node_name
         except Exception as e:
-            print(f"  Error in mapper for {node.type}: {str(e)}")
+            self.logger.error(f"  Error in mapper for {node.type}: {str(e)}")
             raise
     
     def _export_unknown_node(self, node: bpy.types.Node) -> str:
@@ -946,27 +948,27 @@ class MaterialXExporter:
     def _write_file(self):
         """Write the MaterialX document to file."""
         try:
-            print(f"Ensuring output directory exists: {self.output_path.parent}")
+            self.logger.info(f"Ensuring output directory exists: {self.output_path.parent}")
             # Ensure output directory exists
             self.output_path.parent.mkdir(parents=True, exist_ok=True)
             
-            print(f"Writing MaterialX content to: {self.output_path}")
+            self.logger.info(f"Writing MaterialX content to: {self.output_path}")
             # Write the file
             with open(self.output_path, 'w', encoding='utf-8') as f:
                 content = self.builder.to_string()
                 f.write(content)
-                print(f"Successfully wrote {len(content)} characters to file")
+                self.logger.info(f"Successfully wrote {len(content)} characters to file")
                 
         except PermissionError as e:
-            print(f"Permission error writing file: {e}")
-            print(f"Check if you have write permissions to: {self.output_path}")
+            self.logger.error(f"Permission error writing file: {e}")
+            self.logger.error(f"Check if you have write permissions to: {self.output_path}")
             raise
         except OSError as e:
-            print(f"OS error writing file: {e}")
-            print(f"Check if the path is valid: {self.output_path}")
+            self.logger.error(f"OS error writing file: {e}")
+            self.logger.error(f"Check if the path is valid: {self.output_path}")
             raise
         except Exception as e:
-            print(f"Unexpected error writing file: {e}")
+            self.logger.error(f"Unexpected error writing file: {e}")
             raise
     
     def _export_textures(self):
@@ -989,7 +991,7 @@ class MaterialXExporter:
         
         source_path = Path(bpy.path.abspath(image.filepath))
         if not source_path.exists():
-            print(f"Warning: Texture file not found: {source_path}")
+            self.logger.warning(f"Warning: Texture file not found: {source_path}")
             return
         
         # Determine target path
@@ -1002,13 +1004,14 @@ class MaterialXExporter:
         if self.copy_textures:
             try:
                 shutil.copy2(source_path, target_path)
-                print(f"Copied texture: {source_path.name}")
+                self.logger.info(f"Copied texture: {source_path.name}")
             except Exception as e:
-                print(f"Error copying texture {source_path.name}: {str(e)}")
+                self.logger.error(f"Error copying texture {source_path.name}: {str(e)}")
 
 
 def export_material_to_materialx(material: bpy.types.Material, 
                                 output_path: str, 
+                                logger,
                                 options: Dict = None) -> bool:
     """
     Export a Blender material to MaterialX format.
@@ -1021,28 +1024,29 @@ def export_material_to_materialx(material: bpy.types.Material,
     Returns:
         bool: Success status
     """
-    print("=" * 50)
-    print("EXPORT_MATERIAL_TO_MATERIALX: Function called")
-    print("=" * 50)
-    print(f"Material: {material.name if material else 'None'}")
-    print(f"Output path: {output_path}")
-    print(f"Options: {options}")
+
+    logger.info("=" * 50)
+    logger.info("EXPORT_MATERIAL_TO_MATERIALX: Function called")
+    logger.info("=" * 50)
+    logger.info(f"Material: {material.name if material else 'None'}")
+    logger.info(f"Output path: {output_path}")
+    logger.info(f"Options: {options}")
     
     try:
-        exporter = MaterialXExporter(material, output_path, options)
-        print("MaterialXExporter instance created successfully")
+        exporter = MaterialXExporter(material, output_path, logger, options)
+        logger.info("MaterialXExporter instance created successfully")
         result = exporter.export()
-        print(f"Export result: {result}")
+        logger.info(f"Export result: {result}")
         return result
     except Exception as e:
         import traceback
-        print(f"EXCEPTION in export_material_to_materialx: {type(e).__name__}: {str(e)}")
-        print("Full traceback:")
+        logger.error(f"EXCEPTION in export_material_to_materialx: {type(e).__name__}: {str(e)}")
+        logger.error("Full traceback:")
         traceback.print_exc()
         return False
 
 
-def export_all_materials_to_materialx(output_directory: str, options: Dict = None) -> Dict[str, bool]:
+def export_all_materials_to_materialx(output_directory: str, logger, options: Dict = None) -> Dict[str, bool]:
     """
     Export all materials in the current scene to MaterialX format.
     
@@ -1060,7 +1064,7 @@ def export_all_materials_to_materialx(output_directory: str, options: Dict = Non
     for material in bpy.data.materials:
         if material.users > 0:  # Only export materials that are actually used
             output_path = output_dir / f"{material.name}.mtlx"
-            results[material.name] = export_material_to_materialx(material, str(output_path), options)
+            results[material.name] = export_material_to_materialx(material, str(output_path), logger, options)
     
     return results
 
@@ -1122,11 +1126,11 @@ def test_export():
     success = export_material_to_materialx(material, "test_material.mtlx", options)
     
     if success:
-        print("Test export successful!")
+        logger.info("Test export successful!")
         # Clean up test material
         bpy.data.materials.remove(material)
     else:
-        print("Test export failed!")
+        logger.error("Test export failed!")
 
 
 if __name__ == "__main__":
