@@ -29,6 +29,8 @@ python3 dev_upgrade_addon.py
 
 ### In Blender
 
+![Blender Screenshot of the MaterialX Export Property Panel](./BlenderScreenshot.png)
+
 - Access the MaterialX panel in `Properties > Material > MaterialX`.
 - Export the selected material or all materials.
 - Options for exporting/copying textures and using relative paths are available in the export dialogs.
