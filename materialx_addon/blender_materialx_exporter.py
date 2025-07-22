@@ -20,10 +20,11 @@ from typing import Dict, List, Optional, Tuple, Any, Union
 import math
 
 
-def get_input_value_or_connection(node, input_name) -> Tuple[bool, Any, str]:
+def get_input_value_or_connection(node, input_name, exported_nodes=None) -> Tuple[bool, Any, str]:
     """
     Centralized utility to get input value or connection for a Blender node.
     Returns (is_connected, value_or_node_name, type_str)
+    If connected, value_or_node_name is the MaterialX node name (from exported_nodes), not Blender node name.
     """
     if not hasattr(node, 'inputs'):
         raise AttributeError(f"Node {node} has no 'inputs' attribute")
@@ -31,11 +32,12 @@ def get_input_value_or_connection(node, input_name) -> Tuple[bool, Any, str]:
         raise KeyError(f"Input '{input_name}' not found in node {node.name}")
     input_socket = node.inputs[input_name]
     if input_socket.is_linked and input_socket.links:
-        # Connected: return the connected node's name
         from_node = input_socket.links[0].from_node
-        return True, from_node.name, str(input_socket.type)
+        if exported_nodes is not None and from_node in exported_nodes:
+            return True, exported_nodes[from_node], str(input_socket.type)
+        else:
+            return True, from_node.name, str(input_socket.type)
     else:
-        # Not connected: return the default value
         value = getattr(input_socket, 'default_value', None)
         return False, value, str(input_socket.type)
 
@@ -43,9 +45,13 @@ def get_input_value_or_connection(node, input_name) -> Tuple[bool, Any, str]:
 # Declarative node schemas for generic mapping
 NODE_SCHEMAS = {
     'MIX': [
+        # Support both legacy and current Blender Mix node input names
         {'blender': 'A', 'mtlx': 'fg', 'type': 'color3'},
         {'blender': 'B', 'mtlx': 'bg', 'type': 'color3'},
         {'blender': 'Factor', 'mtlx': 'mix', 'type': 'float'},
+        {'blender': 'Color1', 'mtlx': 'fg', 'type': 'color3'},
+        {'blender': 'Color2', 'mtlx': 'bg', 'type': 'color3'},
+        {'blender': 'Fac', 'mtlx': 'mix', 'type': 'float'},
     ],
     'INVERT': [
         {'blender': 'Color', 'mtlx': 'in', 'type': 'color3'},
@@ -126,7 +132,7 @@ class ConstantManager:
         self.counter = 0
 
 
-def map_node_with_schema(node, builder, schema, node_type, node_category, constant_manager=None):
+def map_node_with_schema(node, builder, schema, node_type, node_category, constant_manager=None, exported_nodes=None):
     """
     Generic node mapping using a schema.
     - node: Blender node
@@ -136,22 +142,32 @@ def map_node_with_schema(node, builder, schema, node_type, node_category, consta
     - node_category: MaterialX node category/type (e.g., 'color3')
     Returns the created node name.
     """
+    logger = getattr(builder, 'logger', None)
+    if logger:
+        logger.info(f"[map_node_with_schema] Mapping node: {getattr(node, 'name', str(node))} as type {node_type}")
     node_name = builder.add_node(node_type, f"{node_type}_{node.name}", node_category)
     for entry in schema:
         blender_input = entry['blender']
         mtlx_input = entry['mtlx']
         type_str = entry['type']
         try:
-            is_connected, value_or_node, input_type = get_input_value_or_connection(node, blender_input)
+            if logger:
+                logger.info(f"[map_node_with_schema]  Processing input '{blender_input}' for node '{getattr(node, 'name', str(node))}'")
+            is_connected, value_or_node, input_type = get_input_value_or_connection(node, blender_input, exported_nodes)
+            if logger:
+                logger.info(f"[map_node_with_schema]   is_connected={is_connected}, value_or_node={value_or_node}, input_type={input_type}")
             if is_connected:
+                if logger:
+                    logger.info(f"[map_node_with_schema]   Adding connection: {value_or_node}.out -> {node_name}.{mtlx_input}")
                 builder.add_connection(
                     value_or_node, "out",
                     node_name, mtlx_input
                 )
             elif value_or_node is not None:
                 if constant_manager and value_or_node is not None:
-                    # Use constant manager to deduplicate/in-line
                     const_node = constant_manager.get_or_create_constant(builder, value_or_node, type_str)
+                    if logger:
+                        logger.info(f"[map_node_with_schema]   Using constant node: {const_node} for input '{mtlx_input}'")
                     if constant_manager.should_emit_constant(const_node):
                         builder.add_connection(const_node, "out", node_name, mtlx_input)
                     else:
@@ -166,8 +182,12 @@ def map_node_with_schema(node, builder, schema, node_type, node_category, consta
                     input_elem.set("name", mtlx_input)
                     input_elem.set("type", type_str)
                     input_elem.set("value", str(value_or_node))
-        except (KeyError, AttributeError):
+        except (KeyError, AttributeError) as e:
+            if logger:
+                logger.warning(f"[map_node_with_schema]  Exception for input '{blender_input}' on node '{getattr(node, 'name', str(node))}': {e}")
             continue  # Input not present, skip
+    if logger:
+        logger.info(f"[map_node_with_schema] Finished mapping node: {getattr(node, 'name', str(node))} -> {node_name}")
     return node_name
 
 
@@ -204,7 +224,7 @@ class MaterialXBuilder:
         node.set("name", name)
         if node_type_category:
             node.set("type", node_type_category)
-        # Do not set params as attributes; always use <input> elements
+        # Ensure ALL params are added as <input> elements, never as node attributes
         for param_name, param_value in params.items():
             if param_value is not None:
                 input_elem = ET.SubElement(node, "input")
@@ -274,8 +294,8 @@ class MaterialXBuilder:
             input_elem.set("nodegraph", nodegraph_name)
         elif nodename:
             input_elem.set("nodename", nodename)
-        elif value:
-            input_elem.set("value", value)
+        elif value is not None:
+            input_elem.set("value", str(value))
     
     def add_output(self, name: str, output_type: str, nodename: str):
         """Add an output node to the nodegraph."""
@@ -384,7 +404,7 @@ class NodeMapper:
         return mappers.get(node_type)
     
     @staticmethod
-    def map_principled_bsdf(node, builder: MaterialXBuilder, input_nodes: Dict, input_nodes_by_index: Dict = None, blender_node=None, constant_manager=None) -> str:
+    def map_principled_bsdf(node, builder: MaterialXBuilder, input_nodes: Dict, input_nodes_by_index: Dict = None, blender_node=None, constant_manager=None, exported_nodes=None) -> str:
         # Use schema-driven mapping for all standard inputs
         node_name = builder.add_surface_shader_node("standard_surface", f"surface_{node.name}")
         for entry in NODE_SCHEMAS['PRINCIPLED_BSDF']:
@@ -392,7 +412,7 @@ class NodeMapper:
             mtlx_param = entry['mtlx']
             param_type = entry['type']
             try:
-                is_connected, value_or_node, type_str = get_input_value_or_connection(node, blender_input)
+                is_connected, value_or_node, type_str = get_input_value_or_connection(node, blender_input, exported_nodes)
                 if is_connected:
                     builder.add_output(mtlx_param, param_type, value_or_node)
                     builder.add_surface_shader_input(
@@ -409,9 +429,9 @@ class NodeMapper:
         return node_name
     
     @staticmethod
-    def map_image_texture(node, builder: MaterialXBuilder, input_nodes: Dict, input_nodes_by_index: Dict = None, blender_node=None, constant_manager=None) -> str:
+    def map_image_texture(node, builder: MaterialXBuilder, input_nodes: Dict, input_nodes_by_index: Dict = None, blender_node=None, constant_manager=None, exported_nodes=None) -> str:
         # Use schema-driven mapping for standard inputs
-        node_name = map_node_with_schema(node, builder, NODE_SCHEMAS['IMAGE_TEXTURE'], 'image', 'color3', constant_manager)
+        node_name = map_node_with_schema(node, builder, NODE_SCHEMAS['IMAGE_TEXTURE'], 'image', 'color3', constant_manager, exported_nodes)
 
         # Custom logic for file/image handling
         if node.image:
@@ -429,13 +449,13 @@ class NodeMapper:
         return node_name
     
     @staticmethod
-    def map_tex_coord(node, builder, input_nodes, input_nodes_by_index=None, blender_node=None, constant_manager=None):
+    def map_tex_coord(node, builder, input_nodes, input_nodes_by_index=None, blender_node=None, constant_manager=None, exported_nodes=None):
         """Map Texture Coordinate node to MaterialX texcoord node."""
         node_name = builder.add_node("texcoord", f"texcoord_{node.name}", "vector2")
         return node_name
     
     @staticmethod
-    def map_rgb(node, builder, input_nodes, input_nodes_by_index=None, blender_node=None, constant_manager=None):
+    def map_rgb(node, builder, input_nodes, input_nodes_by_index=None, blender_node=None, constant_manager=None, exported_nodes=None):
         """Map RGB node to MaterialX constant node."""
         color = [node.outputs[0].default_value[0], 
                 node.outputs[0].default_value[1], 
@@ -448,7 +468,7 @@ class NodeMapper:
         return node_name
     
     @staticmethod
-    def map_value(node, builder, input_nodes, input_nodes_by_index=None, blender_node=None, constant_manager=None):
+    def map_value(node, builder, input_nodes, input_nodes_by_index=None, blender_node=None, constant_manager=None, exported_nodes=None):
         """Map Value node to MaterialX constant node."""
         value = node.outputs[0].default_value
         node_name = builder.add_node("constant", f"value_{node.name}", "float")
@@ -459,7 +479,7 @@ class NodeMapper:
         return node_name
     
     @staticmethod
-    def map_normal_map(node, builder, input_nodes, input_nodes_by_index=None, blender_node=None, constant_manager=None):
+    def map_normal_map(node, builder, input_nodes, input_nodes_by_index=None, blender_node=None, constant_manager=None, exported_nodes=None):
         """Map Normal Map node to MaterialX normalmap node."""
         node_name = builder.add_node("normalmap", f"normalmap_{node.name}", "vector3")
         
@@ -480,7 +500,7 @@ class NodeMapper:
         return node_name
     
     @staticmethod
-    def map_vector_math(node, builder: MaterialXBuilder, input_nodes: Dict, input_nodes_by_index: Dict = None, blender_node=None, constant_manager=None) -> str:
+    def map_vector_math(node, builder: MaterialXBuilder, input_nodes: Dict, input_nodes_by_index: Dict = None, blender_node=None, constant_manager=None, exported_nodes=None) -> str:
         """Map Vector Math node to MaterialX math nodes."""
         operation = node.operation.lower()
         
@@ -527,7 +547,7 @@ class NodeMapper:
         return node_name
     
     @staticmethod
-    def map_math(node, builder: MaterialXBuilder, input_nodes: Dict, input_nodes_by_index: Dict = None, blender_node=None, constant_manager=None) -> str:
+    def map_math(node, builder: MaterialXBuilder, input_nodes: Dict, input_nodes_by_index: Dict = None, blender_node=None, constant_manager=None, exported_nodes=None) -> str:
         """Map Math node to MaterialX math nodes."""
         operation = node.operation.lower()
         
@@ -616,21 +636,21 @@ class NodeMapper:
         return node_name
     
     @staticmethod
-    def map_mix(node, builder: MaterialXBuilder, input_nodes: Dict, input_nodes_by_index: Dict = None, blender_node=None, constant_manager=None) -> str:
-        return map_node_with_schema(node, builder, NODE_SCHEMAS['MIX'], 'mix', 'color3', constant_manager)
+    def map_mix(node, builder: MaterialXBuilder, input_nodes: Dict, input_nodes_by_index: Dict = None, blender_node=None, constant_manager=None, exported_nodes=None) -> str:
+        return map_node_with_schema(node, builder, NODE_SCHEMAS['MIX'], 'mix', 'color3', constant_manager, exported_nodes)
 
     @staticmethod
-    def map_invert(node, builder: MaterialXBuilder, input_nodes: Dict, input_nodes_by_index: Dict = None, blender_node=None, constant_manager=None) -> str:
-        return map_node_with_schema(node, builder, NODE_SCHEMAS['INVERT'], 'invert', 'color3', constant_manager)
+    def map_invert(node, builder: MaterialXBuilder, input_nodes: Dict, input_nodes_by_index: Dict = None, blender_node=None, constant_manager=None, exported_nodes=None) -> str:
+        return map_node_with_schema(node, builder, NODE_SCHEMAS['INVERT'], 'invert', 'color3', constant_manager, exported_nodes)
     
     @staticmethod
-    def map_separate_color(node, builder: MaterialXBuilder, input_nodes: Dict, input_nodes_by_index: Dict = None, blender_node=None, constant_manager=None) -> str:
+    def map_separate_color(node, builder: MaterialXBuilder, input_nodes: Dict, input_nodes_by_index: Dict = None, blender_node=None, constant_manager=None, exported_nodes=None) -> str:
         """Map Separate Color node to MaterialX separate3 node."""
         node_name = builder.add_node("separate3", f"separate_{node.name}", "float")
 
         # Use centralized input handling for 'Color' input
         try:
-            is_connected, value_or_node, type_str = get_input_value_or_connection(node, "Color")
+            is_connected, value_or_node, type_str = get_input_value_or_connection(node, "Color", exported_nodes)
             if is_connected:
                 builder.add_connection(
                     value_or_node, "out",
@@ -648,30 +668,30 @@ class NodeMapper:
         return node_name
     
     @staticmethod
-    def map_combine_color(node, builder: MaterialXBuilder, input_nodes: Dict, input_nodes_by_index: Dict = None, blender_node=None, constant_manager=None) -> str:
-        return map_node_with_schema(node, builder, NODE_SCHEMAS['COMBINE_COLOR'], 'combine3', 'color3', constant_manager)
+    def map_combine_color(node, builder: MaterialXBuilder, input_nodes: Dict, input_nodes_by_index: Dict = None, blender_node=None, constant_manager=None, exported_nodes=None) -> str:
+        return map_node_with_schema(node, builder, NODE_SCHEMAS['COMBINE_COLOR'], 'combine3', 'color3', constant_manager, exported_nodes)
 
     @staticmethod
-    def map_bump(node, builder: MaterialXBuilder, input_nodes: Dict, input_nodes_by_index: Dict = None, blender_node=None, constant_manager=None) -> str:
+    def map_bump(node, builder: MaterialXBuilder, input_nodes: Dict, input_nodes_by_index: Dict = None, blender_node=None, constant_manager=None, exported_nodes=None) -> str:
         return map_node_with_schema(node, builder, [
             {'blender': 'Height', 'mtlx': 'in', 'type': 'float'},
             {'blender': 'Strength', 'mtlx': 'scale', 'type': 'float'},
-        ], 'bump', 'vector3', constant_manager)
+        ], 'bump', 'vector3', constant_manager, exported_nodes)
 
     @staticmethod
-    def map_gradient_texture(node, builder: MaterialXBuilder, input_nodes: Dict, input_nodes_by_index: Dict = None, blender_node=None, constant_manager=None) -> str:
+    def map_gradient_texture(node, builder: MaterialXBuilder, input_nodes: Dict, input_nodes_by_index: Dict = None, blender_node=None, constant_manager=None, exported_nodes=None) -> str:
         return map_node_with_schema(node, builder, [
             {'blender': 'Vector', 'mtlx': 'texcoord', 'type': 'vector2'},
-        ], 'ramp', 'color3', constant_manager)
+        ], 'ramp', 'color3', constant_manager, exported_nodes)
 
     @staticmethod
-    def map_noise_texture(node, builder: MaterialXBuilder, input_nodes: Dict, input_nodes_by_index: Dict = None, blender_node=None, constant_manager=None) -> str:
+    def map_noise_texture(node, builder: MaterialXBuilder, input_nodes: Dict, input_nodes_by_index: Dict = None, blender_node=None, constant_manager=None, exported_nodes=None) -> str:
         return map_node_with_schema(node, builder, [
             {'blender': 'Vector', 'mtlx': 'position', 'type': 'vector2'},
-        ], 'noise2d', 'float', constant_manager)
+        ], 'noise2d', 'float', constant_manager, exported_nodes)
     
     @staticmethod
-    def map_mapping(node, builder: MaterialXBuilder, input_nodes: Dict, input_nodes_by_index: Dict = None, blender_node=None, constant_manager=None) -> str:
+    def map_mapping(node, builder: MaterialXBuilder, input_nodes: Dict, input_nodes_by_index: Dict = None, blender_node=None, constant_manager=None, exported_nodes=None) -> str:
         """Map Mapping node to MaterialX place2d node."""
         node_name = builder.add_node("place2d", f"mapping_{node.name}", "vector2")
         # Set pivot, translate, rotate, scale as <input> elements if available
@@ -685,7 +705,7 @@ class NodeMapper:
         return node_name
     
     @staticmethod
-    def map_layer(node, builder: MaterialXBuilder, input_nodes: Dict, input_nodes_by_index: Dict = None, blender_node=None, constant_manager=None) -> str:
+    def map_layer(node, builder: MaterialXBuilder, input_nodes: Dict, input_nodes_by_index: Dict = None, blender_node=None, constant_manager=None, exported_nodes=None) -> str:
         """Map Layer node to MaterialX layer node for vertical layering of BSDFs."""
         node_name = builder.add_node("layer", f"layer_{node.name}", "bsdf")
         
@@ -706,7 +726,7 @@ class NodeMapper:
         return node_name
     
     @staticmethod
-    def map_add(node, builder: MaterialXBuilder, input_nodes: Dict, input_nodes_by_index: Dict = None, blender_node=None, constant_manager=None) -> str:
+    def map_add(node, builder: MaterialXBuilder, input_nodes: Dict, input_nodes_by_index: Dict = None, blender_node=None, constant_manager=None, exported_nodes=None) -> str:
         """Map Add node to MaterialX add node for distribution functions."""
         node_name = builder.add_node("add", f"add_{node.name}", "bsdf")
         for blender_input, mtlx_input in [("A", "in1"), ("B", "in2")]:
@@ -728,7 +748,7 @@ class NodeMapper:
         return node_name
     
     @staticmethod
-    def map_multiply(node, builder: MaterialXBuilder, input_nodes: Dict, input_nodes_by_index: Dict = None, blender_node=None, constant_manager=None) -> str:
+    def map_multiply(node, builder: MaterialXBuilder, input_nodes: Dict, input_nodes_by_index: Dict = None, blender_node=None, constant_manager=None, exported_nodes=None) -> str:
         """Map Multiply node to MaterialX multiply node for distribution functions."""
         node_name = builder.add_node("multiply", f"multiply_{node.name}", "bsdf")
         for blender_input, mtlx_input in [("A", "in1"), ("B", "in2")]:
@@ -750,7 +770,7 @@ class NodeMapper:
         return node_name
     
     @staticmethod
-    def map_roughness_anisotropy(node, builder: MaterialXBuilder, input_nodes: Dict, input_nodes_by_index: Dict = None, blender_node=None, constant_manager=None) -> str:
+    def map_roughness_anisotropy(node, builder: MaterialXBuilder, input_nodes: Dict, input_nodes_by_index: Dict = None, blender_node=None, constant_manager=None, exported_nodes=None) -> str:
         """Map Roughness Anisotropy node to MaterialX roughness_anisotropy utility node."""
         node_name = builder.add_node("roughness_anisotropy", f"roughness_anisotropy_{node.name}", "vector2")
         
@@ -771,7 +791,7 @@ class NodeMapper:
         return node_name
     
     @staticmethod
-    def map_artistic_ior(node, builder: MaterialXBuilder, input_nodes: Dict, input_nodes_by_index: Dict = None, blender_node=None, constant_manager=None) -> str:
+    def map_artistic_ior(node, builder: MaterialXBuilder, input_nodes: Dict, input_nodes_by_index: Dict = None, blender_node=None, constant_manager=None, exported_nodes=None) -> str:
         """Map Artistic IOR node to MaterialX artistic_ior utility node."""
         node_name = builder.add_node("artistic_ior", f"artistic_ior_{node.name}", "vector3")
         
@@ -792,7 +812,7 @@ class NodeMapper:
         return node_name
 
     @staticmethod
-    def map_color_ramp(node, builder: MaterialXBuilder, input_nodes: Dict, input_nodes_by_index: Dict = None, blender_node=None, constant_manager=None) -> str:
+    def map_color_ramp(node, builder: MaterialXBuilder, input_nodes: Dict, input_nodes_by_index: Dict = None, blender_node=None, constant_manager=None, exported_nodes=None) -> str:
         """Map ColorRamp node to MaterialX ramp4 node."""
         node_name = builder.add_node("ramp4", f"color_ramp_{node.name}", "color3")
         ramp = getattr(node, 'color_ramp', None)
@@ -812,7 +832,7 @@ class NodeMapper:
         return node_name
 
     @staticmethod
-    def map_wave_texture(node, builder: MaterialXBuilder, input_nodes: Dict, input_nodes_by_index: Dict = None, blender_node=None, constant_manager=None) -> str:
+    def map_wave_texture(node, builder: MaterialXBuilder, input_nodes: Dict, input_nodes_by_index: Dict = None, blender_node=None, constant_manager=None, exported_nodes=None) -> str:
         """Approximate Wave Texture node using MaterialX nodes (sin, add, etc.)."""
         # Approximate: sin(frequency * (x + y) + phase)
         # 1. Add x and y (from input or texcoord)
@@ -841,8 +861,8 @@ class NodeMapper:
         return sin_node
 
     @staticmethod
-    def map_checker_texture(node, builder: MaterialXBuilder, input_nodes: Dict, input_nodes_by_index: Dict = None, blender_node=None, constant_manager=None) -> str:
-        return map_node_with_schema(node, builder, NODE_SCHEMAS['CHECKER_TEXTURE'], 'checker', 'color3', constant_manager)
+    def map_checker_texture(node, builder: MaterialXBuilder, input_nodes: Dict, input_nodes_by_index: Dict = None, blender_node=None, constant_manager=None, exported_nodes=None) -> str:
+        return map_node_with_schema(node, builder, NODE_SCHEMAS['CHECKER_TEXTURE'], 'checker', 'color3', constant_manager, exported_nodes)
 
 
 class MaterialXExporter:
@@ -1032,7 +1052,7 @@ class MaterialXExporter:
         # Map the node
         try:
             # Pass constant_manager to schema-driven mappers
-            node_name = mapper(node, self.builder, input_nodes, input_nodes_by_index, node, self.constant_manager)
+            node_name = mapper(node, self.builder, input_nodes, input_nodes_by_index, node, self.constant_manager, self.exported_nodes)
             self.exported_nodes[node] = node_name
             self.logger.info(f"  Mapped to: {node_name}")
             return node_name
