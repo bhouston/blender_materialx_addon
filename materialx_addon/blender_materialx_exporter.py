@@ -502,7 +502,7 @@ class NodeMapper:
     @staticmethod
     def map_vector_math(node, builder: MaterialXBuilder, input_nodes: Dict, input_nodes_by_index: Dict = None, blender_node=None, constant_manager=None, exported_nodes=None) -> str:
         """Map Vector Math node to MaterialX math nodes."""
-        operation = node.operation.lower()
+        operation = getattr(node, 'operation', 'ADD').lower()
         
         # Map operations to MaterialX node types
         operation_map = {
@@ -521,37 +521,41 @@ class NodeMapper:
         
         mtlx_operation = operation_map.get(operation, 'add')
         node_name = builder.add_node(mtlx_operation, f"vector_math_{node.name}", "vector3")
-        
-        # Handle inputs - use correct MaterialX parameter names
-        if mtlx_operation in ['add', 'subtract', 'multiply', 'divide']:
-            # These operations use in1, in2
-            for i, input_name in enumerate(['A', 'B']):
-                if input_name in input_nodes:
-                    builder.add_connection(
-                        input_nodes[input_name], "out",
-                        node_name, f"in{i+1}"
-                    )
-        else:
-            # Other operations use different parameter names
-            if 'A' in input_nodes:
-                builder.add_connection(
-                    input_nodes['A'], "out",
-                    node_name, "in1"
-                )
-            if 'B' in input_nodes:
-                builder.add_connection(
-                    input_nodes['B'], "out",
-                    node_name, "in2"
-                )
-        
+        logger = getattr(builder, 'logger', None)
+        for i, mtlx_input in enumerate(['in1', 'in2']):
+            if i < len(node.inputs):
+                socket = node.inputs[i]
+                socket_name = socket.name
+                is_linked = socket.is_linked and socket.links
+                if logger:
+                    logger.info(f"[map_vector_math] Node '{node.name}' input {i}: Blender socket name='{socket_name}', is_linked={is_linked}")
+                if is_linked:
+                    input_node = socket.links[0].from_node
+                    if input_node in exported_nodes:
+                        if logger:
+                            logger.info(f"[map_vector_math]   Adding connection: {exported_nodes[input_node]}.out -> {node_name}.{mtlx_input}")
+                        builder.add_connection(exported_nodes[input_node], "out", node_name, mtlx_input)
+                    else:
+                        if logger:
+                            logger.warning(f"[map_vector_math]   Linked input_node '{input_node.name}' not in exported_nodes!")
+                else:
+                    default_val = getattr(socket, 'default_value', None)
+                    if logger:
+                        logger.info(f"[map_vector_math]   Adding constant input: {mtlx_input} = {default_val}")
+                    input_elem = ET.SubElement(builder.nodes[node_name], "input")
+                    input_elem.set("name", mtlx_input)
+                    input_elem.set("type", "float")
+                    input_elem.set("value", str(default_val))
+            else:
+                if logger:
+                    logger.warning(f"[map_vector_math] Node '{node.name}' does not have input socket {i} for {mtlx_input}")
         return node_name
     
     @staticmethod
     def map_math(node, builder: MaterialXBuilder, input_nodes: Dict, input_nodes_by_index: Dict = None, blender_node=None, constant_manager=None, exported_nodes=None) -> str:
         """Map Math node to MaterialX math nodes."""
+        logger = getattr(builder, 'logger', None)
         operation = node.operation.lower()
-        
-        # Map operations to MaterialX node types
         operation_map = {
             'add': 'add',
             'subtract': 'subtract',
@@ -576,63 +580,37 @@ class NodeMapper:
             'sign': 'sign',
             'compare': 'compare',
         }
-        
         mtlx_operation = operation_map.get(operation, 'add')
         node_name = builder.add_node(mtlx_operation, f"math_{node.name}", "float")
-        
-        # Handle inputs - use correct MaterialX parameter names
-        if mtlx_operation in ['add', 'subtract', 'multiply', 'divide']:
-            # These operations use in1, in2
-            # Use input_nodes_by_index if available to handle duplicate input names
-            if input_nodes_by_index:
-                builder.logger.debug(f"    Using input_nodes_by_index: {input_nodes_by_index}")
-                if 0 in input_nodes_by_index:  # First input (A)
-                    builder.logger.debug(f"    Adding connection from {input_nodes_by_index[0]} to {node_name}.in1")
-                    builder.add_connection(
-                        input_nodes_by_index[0], "out",
-                        node_name, "in1"
-                    )
-                if 1 in input_nodes_by_index:  # Second input (B)
-                    builder.logger.debug(f"    Adding connection from {input_nodes_by_index[1]} to {node_name}.in2")
-                    builder.add_connection(
-                        input_nodes_by_index[1], "out",
-                        node_name, "in2"
-                    )
+
+        # Dynamically map the first two input sockets to in1 and in2
+        for i, mtlx_input in enumerate(['in1', 'in2']):
+            if i < len(node.inputs):
+                socket = node.inputs[i]
+                socket_name = socket.name
+                is_linked = socket.is_linked and socket.links
+                if logger:
+                    logger.info(f"[map_math] Node '{node.name}' input {i}: Blender socket name='{socket_name}', is_linked={is_linked}")
+                if is_linked:
+                    input_node = socket.links[0].from_node
+                    if input_node in exported_nodes:
+                        if logger:
+                            logger.info(f"[map_math]   Adding connection: {exported_nodes[input_node]}.out -> {node_name}.{mtlx_input}")
+                        builder.add_connection(exported_nodes[input_node], "out", node_name, mtlx_input)
+                    else:
+                        if logger:
+                            logger.warning(f"[map_math]   Linked input_node '{input_node.name}' not in exported_nodes!")
+                else:
+                    default_val = getattr(socket, 'default_value', None)
+                    if logger:
+                        logger.info(f"[map_math]   Adding constant input: {mtlx_input} = {default_val}")
+                    input_elem = ET.SubElement(builder.nodes[node_name], "input")
+                    input_elem.set("name", mtlx_input)
+                    input_elem.set("type", "float")
+                    input_elem.set("value", str(default_val))
             else:
-                # Fallback to original method
-                builder.logger.debug(f"    Using fallback method with input_nodes: {input_nodes}")
-                for i, input_name in enumerate(['A', 'B']):
-                    if input_name in input_nodes:
-                        builder.add_connection(
-                            input_nodes[input_name], "out",
-                            node_name, f"in{i+1}"
-                        )
-        else:
-            # Other operations use different parameter names
-            if input_nodes_by_index:
-                if 0 in input_nodes_by_index:  # First input (A)
-                    builder.add_connection(
-                        input_nodes_by_index[0], "out",
-                        node_name, "in1"
-                    )
-                if 1 in input_nodes_by_index:  # Second input (B)
-                    builder.add_connection(
-                        input_nodes_by_index[1], "out",
-                        node_name, "in2"
-                    )
-            else:
-                # Fallback to original method
-                if 'A' in input_nodes:
-                    builder.add_connection(
-                        input_nodes['A'], "out",
-                        node_name, "in1"
-                    )
-                if 'B' in input_nodes:
-                    builder.add_connection(
-                        input_nodes['B'], "out",
-                        node_name, "in2"
-                    )
-        
+                if logger:
+                    logger.warning(f"[map_math] Node '{node.name}' does not have input socket {i} for {mtlx_input}")
         return node_name
     
     @staticmethod
@@ -727,24 +705,35 @@ class NodeMapper:
     
     @staticmethod
     def map_add(node, builder: MaterialXBuilder, input_nodes: Dict, input_nodes_by_index: Dict = None, blender_node=None, constant_manager=None, exported_nodes=None) -> str:
-        """Map Add node to MaterialX add node for distribution functions."""
         node_name = builder.add_node("add", f"add_{node.name}", "bsdf")
-        for blender_input, mtlx_input in [("A", "in1"), ("B", "in2")]:
-            if blender_input in input_nodes:
-                builder.add_connection(input_nodes[blender_input], "out", node_name, mtlx_input)
+        logger = getattr(builder, 'logger', None)
+        for i, mtlx_input in enumerate(['in1', 'in2']):
+            if i < len(node.inputs):
+                socket = node.inputs[i]
+                socket_name = socket.name
+                is_linked = socket.is_linked and socket.links
+                if logger:
+                    logger.info(f"[map_add] Node '{node.name}' input {i}: Blender socket name='{socket_name}', is_linked={is_linked}")
+                if is_linked:
+                    input_node = socket.links[0].from_node
+                    if input_node in exported_nodes:
+                        if logger:
+                            logger.info(f"[map_add]   Adding connection: {exported_nodes[input_node]}.out -> {node_name}.{mtlx_input}")
+                        builder.add_connection(exported_nodes[input_node], "out", node_name, mtlx_input)
+                    else:
+                        if logger:
+                            logger.warning(f"[map_add]   Linked input_node '{input_node.name}' not in exported_nodes!")
+                else:
+                    default_val = getattr(socket, 'default_value', None)
+                    if logger:
+                        logger.info(f"[map_add]   Adding constant input: {mtlx_input} = {default_val}")
+                    input_elem = ET.SubElement(builder.nodes[node_name], "input")
+                    input_elem.set("name", mtlx_input)
+                    input_elem.set("type", "float")
+                    input_elem.set("value", str(default_val))
             else:
-                if blender_node is not None:
-                    idx = [i for i, inp in enumerate(blender_node.inputs) if inp.name == blender_input]
-                    if idx:
-                        default_val = blender_node.inputs[idx[0]].default_value
-                        input_elem = ET.SubElement(builder.nodes[node_name], "input")
-                        input_elem.set("name", mtlx_input)
-                        if isinstance(default_val, (float, int)):
-                            input_elem.set("type", "float")
-                            input_elem.set("value", str(default_val))
-                        elif hasattr(default_val, "__len__") and len(default_val) == 4:
-                            input_elem.set("type", "color3")
-                            input_elem.set("value", str(f"{default_val[0]}, {default_val[1]}, {default_val[2]}"))
+                if logger:
+                    logger.warning(f"[map_add] Node '{node.name}' does not have input socket {i} for {mtlx_input}")
         return node_name
     
     @staticmethod
@@ -849,12 +838,15 @@ class NodeMapper:
         else:
             input_node = None
         # Add a multiply node for scale
-        scale = getattr(node, 'scale', 1.0)
         mult_node = builder.add_node("multiply", f"wave_mult_{node.name}", "float")
         if input_node:
             builder.add_connection(input_node, "out", mult_node, "in1")
-        # Set scale as in2
-        builder.nodes[mult_node].set("in2", str(scale))
+        # Set scale as in2 (as <input> element, not as attribute)
+        scale = getattr(node, 'scale', 1.0)
+        input_elem = ET.SubElement(builder.nodes[mult_node], "input")
+        input_elem.set("name", "in2")
+        input_elem.set("type", "float")
+        input_elem.set("value", str(scale))
         # Add a sin node
         sin_node = builder.add_node("sin", f"wave_sin_{node.name}", "float")
         builder.add_connection(mult_node, "out", sin_node, "in")
