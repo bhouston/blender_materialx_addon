@@ -118,22 +118,22 @@ class MATERIALX_OT_export(Operator):
         try:
             # Export the material
             logger.info("Calling blender_materialx_exporter.export_material_to_materialx...")
-            success = blender_materialx_exporter.export_material_to_materialx(
+            result = blender_materialx_exporter.export_material_to_materialx(
                 context.material, 
                 self.filepath, 
                 logger,
                 options
             )
-            logger.info(f"Exporter returned: {success}")
+            logger.info(f"Exporter returned: {result}")
             
-            if success:
+            if isinstance(result, dict) and result.get('success'):
                 logger.info("SUCCESS: Material export completed successfully")
                 self.report({'INFO'}, f"Successfully exported material '{context.material.name}'")
                 return {'FINISHED'}
             else:
-                logger.error("FAILURE: Material export failed")
-
-                self.report({'ERROR'}, f"Failed to export material '{context.material.name}'")
+                error_msg = result.get('error') if isinstance(result, dict) else str(result)
+                logger.error(f"FAILURE: Material export failed: {error_msg}")
+                self.report({'ERROR'}, f"Failed to export material '{context.material.name}': {error_msg}")
                 return {'CANCELLED'}
                 
         except Exception as e:
