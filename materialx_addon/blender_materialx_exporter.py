@@ -400,6 +400,17 @@ class NodeMapper:
             'WAVE': NodeMapper.map_wave_texture,     # New
             'WAVE_TEXTURE': NodeMapper.map_wave_texture, # Alias
             'TEX_WAVE': NodeMapper.map_wave_texture,     # Alias for Wave Texture
+            # New color and split/merge nodes:
+            'HSV_TO_RGB': NodeMapper.map_hsvtorgb,
+            'RGB_TO_HSV': NodeMapper.map_rgbtohsv,
+            'LUMINANCE': NodeMapper.map_luminance,
+            'BRIGHT_CONTRAST': NodeMapper.map_contrast,
+            'HUE_SAT': NodeMapper.map_saturate,
+            'GAMMA': NodeMapper.map_gamma,
+            'SEPARATE_RGB': NodeMapper.map_split_color,
+            'COMBINE_RGB': NodeMapper.map_merge_color,
+            'SEPARATE_XYZ': NodeMapper.map_split_vector,
+            'COMBINE_XYZ': NodeMapper.map_merge_vector,
         }
         return mappers.get(node_type)
     
@@ -413,6 +424,9 @@ class NodeMapper:
             param_type = entry['type']
             try:
                 is_connected, value_or_node, type_str = get_input_value_or_connection(node, blender_input, exported_nodes)
+                # Special case: skip unconnected normal/tangent inputs for standard_surface
+                if mtlx_param in ("normal", "tangent") and not is_connected:
+                    continue
                 if is_connected:
                     builder.add_output(mtlx_param, param_type, value_or_node)
                     builder.add_surface_shader_input(
@@ -420,9 +434,10 @@ class NodeMapper:
                         nodegraph_name=builder.material_name
                     )
                 else:
+                    formatted_value = format_socket_value(value_or_node)
                     builder.add_surface_shader_input(
                         node_name, mtlx_param, param_type, 
-                        value=value_or_node
+                        value=formatted_value
                     )
             except (KeyError, AttributeError):
                 continue  # Input not present, skip
@@ -517,6 +532,16 @@ class NodeMapper:
             'distance': 'distance',
             'reflect': 'reflect',
             'refract': 'refract',
+            'project': 'project',
+            'clamp': 'clamp',
+            'floor': 'floor',
+            'ceil': 'ceil',
+            'modulo': 'modulo',
+            'round': 'round',
+            'sign': 'sign',
+            'min': 'min',
+            'max': 'max',
+            'abs': 'abs',
         }
         
         mtlx_operation = operation_map.get(operation, 'add')
@@ -579,6 +604,7 @@ class NodeMapper:
             'round': 'round',
             'sign': 'sign',
             'compare': 'compare',
+            'clamp': 'clamp',
         }
         mtlx_operation = operation_map.get(operation, 'add')
         node_name = builder.add_node(mtlx_operation, f"math_{node.name}", "float")
@@ -856,6 +882,84 @@ class NodeMapper:
     def map_checker_texture(node, builder: MaterialXBuilder, input_nodes: Dict, input_nodes_by_index: Dict = None, blender_node=None, constant_manager=None, exported_nodes=None) -> str:
         return map_node_with_schema(node, builder, NODE_SCHEMAS['CHECKER_TEXTURE'], 'checker', 'color3', constant_manager, exported_nodes)
 
+    @staticmethod
+    def map_hsvtorgb(node, builder, input_nodes, input_nodes_by_index=None, blender_node=None, constant_manager=None, exported_nodes=None):
+        node_name = builder.add_node("hsvtorgb", f"hsvtorgb_{node.name}", "color3")
+        if 'Color' in input_nodes:
+            builder.add_connection(input_nodes['Color'], "out", node_name, "in")
+        return node_name
+
+    @staticmethod
+    def map_rgbtohsv(node, builder, input_nodes, input_nodes_by_index=None, blender_node=None, constant_manager=None, exported_nodes=None):
+        node_name = builder.add_node("rgbtohsv", f"rgbtohsv_{node.name}", "color3")
+        if 'Color' in input_nodes:
+            builder.add_connection(input_nodes['Color'], "out", node_name, "in")
+        return node_name
+
+    @staticmethod
+    def map_luminance(node, builder, input_nodes, input_nodes_by_index=None, blender_node=None, constant_manager=None, exported_nodes=None):
+        node_name = builder.add_node("luminance", f"luminance_{node.name}", "float")
+        if 'Color' in input_nodes:
+            builder.add_connection(input_nodes['Color'], "out", node_name, "in")
+        return node_name
+
+    @staticmethod
+    def map_contrast(node, builder, input_nodes, input_nodes_by_index=None, blender_node=None, constant_manager=None, exported_nodes=None):
+        node_name = builder.add_node("contrast", f"contrast_{node.name}", "color3")
+        if 'Color' in input_nodes:
+            builder.add_connection(input_nodes['Color'], "out", node_name, "in")
+        if 'Contrast' in input_nodes:
+            builder.add_connection(input_nodes['Contrast'], "out", node_name, "amount")
+        return node_name
+
+    @staticmethod
+    def map_saturate(node, builder, input_nodes, input_nodes_by_index=None, blender_node=None, constant_manager=None, exported_nodes=None):
+        node_name = builder.add_node("saturate", f"saturate_{node.name}", "color3")
+        if 'Color' in input_nodes:
+            builder.add_connection(input_nodes['Color'], "out", node_name, "in")
+        if 'Saturation' in input_nodes:
+            builder.add_connection(input_nodes['Saturation'], "out", node_name, "amount")
+        return node_name
+
+    @staticmethod
+    def map_gamma(node, builder, input_nodes, input_nodes_by_index=None, blender_node=None, constant_manager=None, exported_nodes=None):
+        node_name = builder.add_node("gamma", f"gamma_{node.name}", "color3")
+        if 'Color' in input_nodes:
+            builder.add_connection(input_nodes['Color'], "out", node_name, "in")
+        if 'Gamma' in input_nodes:
+            builder.add_connection(input_nodes['Gamma'], "out", node_name, "amount")
+        return node_name
+
+    @staticmethod
+    def map_split_color(node, builder, input_nodes, input_nodes_by_index=None, blender_node=None, constant_manager=None, exported_nodes=None):
+        node_name = builder.add_node("separate3", f"split_color_{node.name}", "float")
+        if 'Color' in input_nodes:
+            builder.add_connection(input_nodes['Color'], "out", node_name, "in")
+        return node_name
+
+    @staticmethod
+    def map_merge_color(node, builder, input_nodes, input_nodes_by_index=None, blender_node=None, constant_manager=None, exported_nodes=None):
+        node_name = builder.add_node("combine3", f"merge_color_{node.name}", "color3")
+        for c, mtlx_input in zip(['R', 'G', 'B'], ['r', 'g', 'b']):
+            if c in input_nodes:
+                builder.add_connection(input_nodes[c], "out", node_name, mtlx_input)
+        return node_name
+
+    @staticmethod
+    def map_split_vector(node, builder, input_nodes, input_nodes_by_index=None, blender_node=None, constant_manager=None, exported_nodes=None):
+        node_name = builder.add_node("separate3", f"split_vector_{node.name}", "float")
+        if 'Vector' in input_nodes:
+            builder.add_connection(input_nodes['Vector'], "out", node_name, "in")
+        return node_name
+
+    @staticmethod
+    def map_merge_vector(node, builder, input_nodes, input_nodes_by_index=None, blender_node=None, constant_manager=None, exported_nodes=None):
+        node_name = builder.add_node("combine3", f"merge_vector_{node.name}", "vector3")
+        for c, mtlx_input in zip(['X', 'Y', 'Z'], ['in1', 'in2', 'in3']):
+            if c in input_nodes:
+                builder.add_connection(input_nodes[c], "out", node_name, mtlx_input)
+        return node_name
+
 
 class MaterialXExporter:
     """Main MaterialX exporter class."""
@@ -1125,6 +1229,26 @@ class MaterialXExporter:
                 self.logger.info(f"Copied texture: {source_path.name}")
             except Exception as e:
                 self.logger.error(f"Error copying texture {source_path.name}: {str(e)}")
+
+
+# Utility to robustly format Blender socket values for MaterialX XML
+def format_socket_value(value):
+    """
+    Format a Blender socket value for MaterialX XML.
+    Handles scalars, tuples, lists, and Blender's bpy_prop_array types.
+    """
+    # Blender's vector types can be mathutils.Vector, or bpy_prop_array, or tuple/list
+    if hasattr(value, "__len__") and not isinstance(value, str):
+        try:
+            # Try to convert to list of floats
+            return ", ".join(str(float(v)) for v in value)
+        except Exception:
+            return str(value)
+    else:
+        try:
+            return str(float(value))
+        except Exception:
+            return str(value)
 
 
 def export_material_to_materialx(material: bpy.types.Material, 
