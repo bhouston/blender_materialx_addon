@@ -11,7 +11,7 @@ Usage:
 Examples:
     python cmdline_export.py scene.blend "MyMaterial" output.mtlx
     python cmdline_export.py scene.blend "MyMaterial" output.mtlx --export-textures --texture-path ./textures
-    python cmdline_export.py scene.blend "MyMaterial" output.mtlx --version 1.38 --relative-paths
+    python cmdline_export.py scene.blend "MyMaterial" output.mtlx --version 1.39 --relative-paths
 
 Arguments:
     blend_file      Path to the .blend file containing the material
@@ -21,7 +21,7 @@ Arguments:
 Options:
     --export-textures    Export texture files (default: False)
     --texture-path PATH  Directory to export textures to (default: ./textures)
-    --version VERSION    MaterialX version (default: 1.38)
+    --version VERSION    MaterialX version (default: 1.39)
     --relative-paths     Use relative paths for textures (default: True)
     --copy-textures      Copy texture files (default: True)
     --active-uvmap NAME  Active UV map name (default: UVMap)
