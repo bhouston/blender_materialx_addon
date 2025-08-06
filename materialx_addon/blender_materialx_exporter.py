@@ -190,7 +190,7 @@ NODE_SCHEMAS = {
         {'blender': 'Transmission Extra Roughness', 'mtlx': 'transmission_extra_roughness', 'type': 'float', 'category': 'surfaceshader'},
         
         # Opacity
-        {'blender': 'Alpha', 'mtlx': 'opacity', 'type': 'color3', 'category': 'surfaceshader'},
+        {'blender': 'Alpha', 'mtlx': 'opacity', 'type': 'float', 'category': 'surfaceshader'},
         
         # Normal mapping
         {'blender': 'Normal', 'mtlx': 'normal', 'type': 'vector3', 'category': 'surfaceshader'},
@@ -1027,6 +1027,21 @@ class NodeMapper:
             'anisotropic_direction': [0.0, 1.0, 0.0],
         }
         
+        # Essential parameters that should always be included (with default values)
+        essential_params = {
+            'base': 1.0,
+            'specular': 1.0,
+            'specular_roughness': 0.5
+        }
+        
+        # First, add essential parameters that should always be present
+        for mtlx_param, default_value in essential_params.items():
+            builder.library_builder.node_builder.create_mtlx_input(
+                builder.nodes[node_name], mtlx_param, 
+                value=default_value,
+                node_type='standard_surface', category='surfaceshader'
+            )
+        
         # Map inputs using enhanced schema with type information
         for entry in NODE_SCHEMAS['PRINCIPLED_BSDF']:
             blender_input = entry['blender']
@@ -1039,6 +1054,10 @@ class NodeMapper:
                 
                 # Special case: skip unconnected normal/tangent inputs for standard_surface
                 if mtlx_param in ("normal", "tangent") and not is_connected:
+                    continue
+                
+                # Skip essential parameters that we already added
+                if mtlx_param in essential_params:
                     continue
                 
                 if is_connected:

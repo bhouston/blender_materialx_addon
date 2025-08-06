@@ -1239,6 +1239,10 @@ class MaterialXNodeBuilder:
                     # Set connection
                     input_elem.setNodeName(nodename)
                     self.logger.debug(f"Connected input {input_name} to {nodename}")
+                
+                # Add colorspace attribute for opacity inputs
+                if input_name == 'opacity':
+                    input_elem.setAttribute('colorspace', 'lin_rec709')
             
             return input_elem
             
@@ -1411,7 +1415,7 @@ class MaterialXNodeBuilder:
             'transmission_scatter_anisotropy': 'float',
             'transmission_dispersion': 'float',
             'transmission_extra_roughness': 'float',
-            'opacity': 'color3',
+            'opacity': 'float',
             'emission': 'float',
             'emission_color': 'color3',
             'subsurface': 'float',
@@ -1535,7 +1539,7 @@ class MaterialXConnectionManager:
             'transmission_scatter_anisotropy': 'float',
             'transmission_dispersion': 'float',
             'transmission_extra_roughness': 'float',
-            'opacity': 'color3',
+            'opacity': 'float',
             'emission': 'float',
             'emission_color': 'color3',
             'subsurface': 'float',
