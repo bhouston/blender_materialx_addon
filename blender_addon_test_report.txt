@@ -1,20 +1,24 @@
 
 ================================================================================
-ENHANCED COMPREHENSIVE BLENDER MATERIALX ADDON TEST REPORT
+COMPREHENSIVE BLENDER MATERIALX ADDON TEST REPORT
 ================================================================================
 
 SUMMARY:
-- Total Tests: 5
+- Total Tests: 6
 - Passed: 5
-- Failed: 0
-- Success Rate: 100.0%
+- Failed: 1
+- Success Rate: 83.3%
 
 DETAILED RESULTS:
 - addon_installation: ✓ PASSED
 - ui_functionality: ✓ PASSED
+- error_conditions: ✗ FAILED
 - material_export: ✓ PASSED
 - material_validation: ✓ PASSED
 - performance: ✓ PASSED
+
+FAILED TESTS (1):
+- error_conditions
 
 TEST MATERIALS USED:
 - SimplePrincipled.blend: Basic Principled BSDF material
@@ -25,5 +29,9 @@ TEST MATERIALS USED:
 - EmissionMaterial.blend: Emission shader material
 - MixedShader.blend: Material mixing different shaders
 - MathHeavy.blend: Material with extensive math operations
+
+ERROR CONDITION TESTS:
+- Emission shader (unsupported node type)
+- Fresnel node (unsupported node type)
 
 ================================================================================

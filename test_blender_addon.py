@@ -2,16 +2,17 @@
 """
 Comprehensive Blender MaterialX Addon Test
 
-This script runs Blender and tests the MaterialX addon with real materials,
-UI testing, and validation of exported MaterialX files.
+This script runs Blender and tests the MaterialX addon with real-world materials,
+UI testing, validation of exported MaterialX files, and error condition testing.
 
 Features:
 - Tests addon installation and loading
-- Creates various test materials with different node types
+- Uses real-world Blender material examples with complex node graphs
 - Tests UI functionality (export buttons, configuration)
 - Validates exported MaterialX files
-- Tests error conditions and edge cases
+- Tests error conditions and edge cases (unsupported nodes)
 - Performance testing with complex materials
+- Comprehensive material type coverage
 """
 
 import sys
@@ -66,126 +67,60 @@ def find_blender_executable():
     
     raise RuntimeError("Could not find Blender executable")
 
-def create_test_blend_file(test_materials: List[Dict]) -> str:
-    """Create a Blender file with test materials."""
+def get_test_blend_files():
+    """Get list of test blend files from examples directory."""
+    examples_dir = Path("examples/blender")
+    if not examples_dir.exists():
+        raise RuntimeError(f"Examples directory not found: {examples_dir}")
+    
+    blend_files = list(examples_dir.glob("*.blend"))
+    if not blend_files:
+        raise RuntimeError(f"No .blend files found in {examples_dir}")
+    
+    # Filter out backup files (files ending with numbers)
+    blend_files = [f for f in blend_files if not f.name.split('.')[0].endswith(('1', '2', '3', '4', '5'))]
+    
+    logger = logging.getLogger('BlenderAddonTest')
+    logger.info(f"Found {len(blend_files)} test blend files:")
+    for blend_file in blend_files:
+        logger.info(f"  - {blend_file.name}")
+    
+    return blend_files
+
+def get_materials_from_blend_file(blend_file: Path) -> List[str]:
+    """Get list of material names from a blend file."""
     logger = logging.getLogger('BlenderAddonTest')
     
-    # Create a temporary .blend file
-    temp_dir = tempfile.mkdtemp()
-    blend_file = os.path.join(temp_dir, "test_materials.blend")
-    
-    # Create Python script to generate test materials
-    python_script = f"""
+    # Create Python script to list materials
+    script = f"""
 import bpy
 import sys
-import os
 
-# Clear existing data
-bpy.ops.object.select_all(action='SELECT')
-bpy.ops.object.delete(use_global=False)
-
-# Remove all materials
-for material in bpy.data.materials:
-    bpy.data.materials.remove(material)
-
-# Create test materials
-{chr(10).join([create_material_code(material) for material in test_materials])}
-
-# Save the file
-bpy.ops.wm.save_as_mainfile(filepath="{blend_file}")
-
-print("Test blend file created successfully")
+# Load the blend file
+try:
+    bpy.ops.wm.open_mainfile(filepath="{blend_file.absolute()}")
+    print("File loaded successfully")
+    
+    # List materials
+    materials = [mat.name for mat in bpy.data.materials]
+    print("MATERIALS:", ",".join(materials))
+    
+except Exception as e:
+    print(f"Error loading file: {{e}}")
+    sys.exit(1)
 """
     
-    # Write Python script to temporary file
-    script_file = os.path.join(temp_dir, "create_test_materials.py")
-    with open(script_file, 'w') as f:
-        f.write(python_script)
-    
-    # Run Blender to create the test file
     blender_path = find_blender_executable()
-    cmd = [
-        blender_path,
-        "--background",
-        "--python", script_file
-    ]
+    result = run_blender_script(blender_path, script)
     
-    logger.info(f"Creating test blend file: {blend_file}")
-    result = subprocess.run(cmd, capture_output=True, text=True, timeout=60)
-    
-    if result.returncode != 0:
-        logger.error(f"Failed to create test blend file: {result.stderr}")
-        raise RuntimeError("Failed to create test blend file")
-    
-    logger.info("Test blend file created successfully")
-    return blend_file
-
-def create_material_code(material_config: Dict) -> str:
-    """Generate Python code to create a test material."""
-    material_name = material_config['name']
-    node_types = material_config['nodes']
-    
-    code = f"""
-# Create material: {material_name}
-material = bpy.data.materials.new(name="{material_name}")
-material.use_nodes = True
-nodes = material.node_tree.nodes
-links = material.node_tree.links
-
-# Clear default nodes
-nodes.clear()
-
-# Create nodes
-"""
-    
-    # Add node creation code
-    for i, node_type in enumerate(node_types):
-        if node_type == 'Principled BSDF':
-            code += f"principled = nodes.new(type='ShaderNodeBsdfPrincipled')\n"
-            code += f"principled.location = ({i * 200}, 0)\n"
-        elif node_type == 'RGB':
-            code += f"rgb = nodes.new(type='ShaderNodeRGB')\n"
-            code += f"rgb.location = ({i * 200}, 200)\n"
-            code += f"rgb.outputs[0].default_value = (0.8, 0.2, 0.2, 1.0)\n"
-        elif node_type == 'Value':
-            code += f"value = nodes.new(type='ShaderNodeValue')\n"
-            code += f"value.location = ({i * 200}, -200)\n"
-            code += f"value.outputs[0].default_value = 0.5\n"
-        elif node_type == 'Math':
-            code += f"math = nodes.new(type='ShaderNodeMath')\n"
-            code += f"math.location = ({i * 200}, 0)\n"
-            code += f"math.operation = 'MULTIPLY'\n"
-        elif node_type == 'Mix':
-            code += f"mix = nodes.new(type='ShaderNodeMixRGB')\n"
-            code += f"mix.location = ({i * 200}, 0)\n"
-        elif node_type == 'Image Texture':
-            code += f"tex = nodes.new(type='ShaderNodeTexImage')\n"
-            code += f"tex.location = ({i * 200}, 0)\n"
-        elif node_type == 'Noise Texture':
-            code += f"noise = nodes.new(type='ShaderNodeTexNoise')\n"
-            code += f"noise.location = ({i * 200}, 0)\n"
-        elif node_type == 'Normal Map':
-            code += f"normal = nodes.new(type='ShaderNodeNormalMap')\n"
-            code += f"normal.location = ({i * 200}, 0)\n"
-    
-    # Add Material Output node
-    code += f"""
-# Create Material Output
-output = nodes.new(type='ShaderNodeOutputMaterial')
-output.location = ({len(node_types) * 200}, 0)
-
-# Connect nodes (simple connections)
-if len(nodes) > 1:
-    for i in range(len(nodes) - 1):
-        if i + 1 < len(nodes):
-            links.new(nodes[i].outputs[0], nodes[i+1].inputs[0])
-    
-    # Connect last node to output
-    if len(nodes) > 1:
-        links.new(nodes[-2].outputs[0], output.inputs['Surface'])
-"""
-    
-    return code
+    if "MATERIALS:" in result:
+        materials_line = [line for line in result.split('\n') if line.startswith('MATERIALS:')][0]
+        materials = materials_line.split('MATERIALS:')[1].strip().split(',')
+        logger.info(f"Found materials in {blend_file.name}: {materials}")
+        return materials
+    else:
+        logger.error(f"Failed to get materials from {blend_file.name}: {result}")
+        return []
 
 def test_addon_installation():
     """Test if the MaterialX addon is properly installed."""
@@ -233,10 +168,10 @@ else:
         logger.error(f"Output: {result}")
         return False
 
-def test_material_export(material_name: str, blend_file: str, output_dir: str) -> bool:
-    """Test exporting a specific material."""
+def test_material_export(material_name: str, blend_file: Path, output_dir: str) -> bool:
+    """Test exporting a specific material from a blend file."""
     logger = logging.getLogger('BlenderAddonTest')
-    logger.info(f"Testing export of material: {material_name}")
+    logger.info(f"Testing export of material: {material_name} from {blend_file.name}")
     
     # Create Python script to test export
     test_script = f"""
@@ -251,13 +186,13 @@ logger = logging.getLogger('TestExport')
 
 # Load the blend file
 print("Loading blend file...")
-bpy.ops.wm.open_mainfile(filepath="{blend_file}")
+bpy.ops.wm.open_mainfile(filepath="{blend_file.absolute()}")
 print("Blend file loaded successfully")
 
 # Find the material
 material = bpy.data.materials.get("{material_name}")
 if not material:
-    print(f"✗ Material '{material_name}' not found")
+    print(f"✗ Material '{{material_name}}' not found")
     print(f"Available materials: {{[m.name for m in bpy.data.materials]}}")
     sys.exit(1)
 
@@ -316,6 +251,131 @@ except Exception as e:
         return True
     else:
         logger.error(f"✗ Material export test failed: {material_name}")
+        logger.error(f"Output: {result}")
+        return False
+
+def test_error_conditions():
+    """Test error conditions with unsupported nodes."""
+    logger = logging.getLogger('BlenderAddonTest')
+    logger.info("Testing error conditions with unsupported nodes...")
+    
+    # Create Python script to test error conditions
+    test_script = """
+import bpy
+import os
+import sys
+import tempfile
+import logging
+
+# Set up logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger('TestErrors')
+
+# Test 1: Material with Emission shader (unsupported)
+print("🧪 Test 1: Material with Emission shader")
+material1 = bpy.data.materials.new(name="TestEmission")
+material1.use_nodes = True
+nodes1 = material1.node_tree.nodes
+links1 = material1.node_tree.links
+
+# Clear default nodes
+nodes1.clear()
+
+# Create Emission shader (unsupported)
+emission = nodes1.new(type='ShaderNodeEmission')
+emission.location = (0, 0)
+emission.inputs['Color'].default_value = (1.0, 0.5, 0.2, 1.0)
+emission.inputs['Strength'].default_value = 5.0
+
+# Create Material Output
+output1 = nodes1.new(type='ShaderNodeOutputMaterial')
+output1.location = (300, 0)
+
+# Connect
+links1.new(emission.outputs['Emission'], output1.inputs['Surface'])
+
+# Test 2: Material with Fresnel node (unsupported)
+print("🧪 Test 2: Material with Fresnel node")
+material2 = bpy.data.materials.new(name="TestFresnel")
+material2.use_nodes = True
+nodes2 = material2.node_tree.nodes
+links2 = material2.node_tree.links
+
+# Clear default nodes
+nodes2.clear()
+
+# Create Fresnel node (unsupported)
+fresnel = nodes2.new(type='ShaderNodeFresnel')
+fresnel.location = (-200, 0)
+fresnel.inputs['IOR'].default_value = 1.45
+
+# Create Principled BSDF
+principled = nodes2.new(type='ShaderNodeBsdfPrincipled')
+principled.location = (0, 0)
+principled.inputs['Base Color'].default_value = (0.8, 0.9, 1.0, 1.0)
+
+# Create Material Output
+output2 = nodes2.new(type='ShaderNodeOutputMaterial')
+output2.location = (300, 0)
+
+# Connect
+links2.new(fresnel.outputs['Fac'], principled.inputs['Metallic'])
+links2.new(principled.outputs['BSDF'], output2.inputs['Surface'])
+
+# Test export with error handling
+try:
+    from materialx_addon import blender_materialx_exporter
+    
+    # Test Emission material
+    with tempfile.NamedTemporaryFile(suffix='.mtlx', delete=False) as f:
+        output_path1 = f.name
+    
+    result1 = blender_materialx_exporter.export_material_to_materialx(
+        material1, output_path1, logger, {'strict_mode': False}
+    )
+    
+    print(f"Emission material result: {{result1}}")
+    
+    # Test Fresnel material
+    with tempfile.NamedTemporaryFile(suffix='.mtlx', delete=False) as f:
+        output_path2 = f.name
+    
+    result2 = blender_materialx_exporter.export_material_to_materialx(
+        material2, output_path2, logger, {'strict_mode': False}
+    )
+    
+    print(f"Fresnel material result: {{result2}}")
+    
+    # Check if we got helpful error messages
+    if not result1.get('success', False) and 'unsupported' in str(result1).lower():
+        print("✓ Emission material correctly identified as unsupported")
+    else:
+        print("✗ Emission material should have been identified as unsupported")
+    
+    if not result2.get('success', False) and 'unsupported' in str(result2).lower():
+        print("✓ Fresnel material correctly identified as unsupported")
+    else:
+        print("✗ Fresnel material should have been identified as unsupported")
+    
+    # Cleanup
+    os.unlink(output_path1)
+    os.unlink(output_path2)
+    
+except Exception as e:
+    print(f"✗ Error testing exception: {{e}}")
+    import traceback
+    traceback.print_exc()
+"""
+    
+    # Run test in Blender
+    blender_path = find_blender_executable()
+    result = run_blender_script(blender_path, test_script)
+    
+    if "✓ Emission material correctly identified as unsupported" in result and "✓ Fresnel material correctly identified as unsupported" in result:
+        logger.info("✓ Error condition tests passed")
+        return True
+    else:
+        logger.error("✗ Error condition tests failed")
         logger.error(f"Output: {result}")
         return False
 
@@ -448,31 +508,11 @@ def run_blender_script(blender_path: str, script: str) -> str:
         os.unlink(script_file)
 
 def run_comprehensive_test():
-    """Run the comprehensive Blender addon test."""
+    """Run the comprehensive Blender addon test with real-world materials."""
     logger = setup_logging()
     
     logger.info("🚀 Starting Comprehensive Blender MaterialX Addon Test")
     logger.info("=" * 80)
-    
-    # Test configuration
-    test_materials = [
-        {
-            'name': 'SimpleMaterial',
-            'nodes': ['RGB', 'Principled BSDF']
-        },
-        {
-            'name': 'ComplexMaterial',
-            'nodes': ['RGB', 'Math', 'Mix', 'Principled BSDF']
-        },
-        {
-            'name': 'TextureMaterial',
-            'nodes': ['Noise Texture', 'Normal Map', 'Principled BSDF']
-        },
-        {
-            'name': 'ValueMaterial',
-            'nodes': ['Value', 'Math', 'Principled BSDF']
-        }
-    ]
     
     results = {}
     
@@ -485,38 +525,70 @@ def run_comprehensive_test():
         logger.info("🧪 Test 2: UI Functionality")
         results['ui_functionality'] = test_ui_functionality()
         
-        # Test 3: Material Export
-        logger.info("🧪 Test 3: Material Export")
+        # Test 3: Error Conditions
+        logger.info("🧪 Test 3: Error Conditions")
+        results['error_conditions'] = test_error_conditions()
         
-        # Create test blend file
-        blend_file = create_test_blend_file(test_materials)
+        # Test 4: Material Export with Real-World Examples
+        logger.info("🧪 Test 4: Material Export with Real-World Examples")
+        
+        # Get test blend files
+        blend_files = get_test_blend_files()
         
         # Create output directory
         output_dir = tempfile.mkdtemp()
         
         export_results = []
-        for material_config in test_materials:
-            material_name = material_config['name']
-            success = test_material_export(material_name, blend_file, output_dir)
-            export_results.append(success)
+        validation_results = []
+        
+        for blend_file in blend_files:
+            logger.info(f"Testing file: {blend_file.name}")
             
-            # Validate exported file
-            mtlx_file = os.path.join(output_dir, f"{material_name}.mtlx")
-            if os.path.exists(mtlx_file):
-                validation_success = validate_materialx_file(mtlx_file)
-                logger.info(f"  Validation for {material_name}: {'✓' if validation_success else '✗'}")
-            else:
-                logger.error(f"  ✗ Exported file not found: {mtlx_file}")
+            # Get materials from this file
+            materials = get_materials_from_blend_file(blend_file)
+            
+            for material_name in materials:
+                logger.info(f"  Testing material: {material_name}")
+                
+                # Test export
+                success = test_material_export(material_name, blend_file, output_dir)
+                export_results.append(success)
+                
+                # Validate exported file
+                mtlx_file = os.path.join(output_dir, f"{material_name}.mtlx")
+                if os.path.exists(mtlx_file):
+                    validation_success = validate_materialx_file(mtlx_file)
+                    validation_results.append(validation_success)
+                    logger.info(f"    Validation: {'✓' if validation_success else '✗'}")
+                else:
+                    logger.error(f"    ✗ Exported file not found: {mtlx_file}")
+                    validation_results.append(False)
         
         results['material_export'] = all(export_results)
+        results['material_validation'] = all(validation_results)
         
-        # Test 4: Performance Testing
-        logger.info("🧪 Test 4: Performance Testing")
-        performance_success = test_performance_with_complex_material(blend_file, output_dir)
-        results['performance'] = performance_success
+        # Test 5: Performance Testing with Complex Materials
+        logger.info("🧪 Test 5: Performance Testing")
+        
+        # Test with the most complex material (ComplexProcedural)
+        complex_blend_file = next((f for f in blend_files if "ComplexProcedural" in f.name), blend_files[0])
+        complex_materials = get_materials_from_blend_file(complex_blend_file)
+        
+        if complex_materials:
+            start_time = time.time()
+            performance_success = test_material_export(complex_materials[0], complex_blend_file, output_dir)
+            end_time = time.time()
+            
+            duration = end_time - start_time
+            logger.info(f"Performance test took {duration:.2f} seconds")
+            
+            if duration > 60:  # More than 60 seconds is too slow
+                logger.warning(f"⚠ Performance test took longer than expected: {duration:.2f}s")
+                performance_success = False
+            
+            results['performance'] = performance_success
         
         # Cleanup
-        shutil.rmtree(os.path.dirname(blend_file), ignore_errors=True)
         shutil.rmtree(output_dir, ignore_errors=True)
         
     except Exception as e:
@@ -532,35 +604,11 @@ def run_comprehensive_test():
     overall_success = all(results.values())
     
     if overall_success:
-        logger.info("🎉 ALL TESTS PASSED! MaterialX addon is working correctly.")
+        logger.info("🎉 ALL TESTS PASSED! MaterialX addon is working correctly with real-world materials.")
     else:
         logger.error("❌ SOME TESTS FAILED! Please review the test results.")
     
     return overall_success
-
-def test_performance_with_complex_material(blend_file: str, output_dir: str) -> bool:
-    """Test performance with a complex material."""
-    logger = logging.getLogger('BlenderAddonTest')
-    logger.info("Testing performance with complex material...")
-    
-    # Create a complex material with many nodes
-    complex_material = {
-        'name': 'PerformanceTestMaterial',
-        'nodes': ['RGB', 'Math', 'Mix', 'Noise Texture', 'Normal Map', 'Math', 'Mix', 'Principled BSDF']
-    }
-    
-    start_time = time.time()
-    success = test_material_export(complex_material['name'], blend_file, output_dir)
-    end_time = time.time()
-    
-    duration = end_time - start_time
-    logger.info(f"Performance test took {duration:.2f} seconds")
-    
-    if duration > 30:  # More than 30 seconds is too slow
-        logger.warning(f"⚠ Performance test took longer than expected: {duration:.2f}s")
-        return False
-    
-    return success
 
 def generate_test_report(results: Dict[str, bool]):
     """Generate a test report."""
@@ -594,7 +642,23 @@ DETAILED RESULTS:
             if not result:
                 report += f"- {test_name}\n"
     
-    report += f"\n{'='*80}\n"
+    report += f"""
+TEST MATERIALS USED:
+- SimplePrincipled.blend: Basic Principled BSDF material
+- TextureBased.blend: Material with noise textures and color ramps
+- ComplexProcedural.blend: Complex procedural material with multiple noise layers
+- GlassMaterial.blend: Glass material with transparency and fresnel
+- MetallicMaterial.blend: Metallic material with anisotropy
+- EmissionMaterial.blend: Emission shader material
+- MixedShader.blend: Material mixing different shaders
+- MathHeavy.blend: Material with extensive math operations
+
+ERROR CONDITION TESTS:
+- Emission shader (unsupported node type)
+- Fresnel node (unsupported node type)
+
+{'='*80}
+"""
     
     # Save report to file
     with open('blender_addon_test_report.txt', 'w') as f:
