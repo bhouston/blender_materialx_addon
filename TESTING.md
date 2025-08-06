@@ -37,6 +37,8 @@ blender --background --python create_test_materials.py
 python3 test_blender_addon.py
 ```
 
+**Note**: The test script now preserves all exported MaterialX files in a `test_output_mtlx/` directory for inspection. This allows you to examine the actual output and identify any issues that might not be caught by the validation.
+
 ## 📊 Test Results
 
 ### Current Test Status (Latest Run)
@@ -187,6 +189,17 @@ ERROR CONDITION TESTS:
 ================================================================================
 🎉 ALL TESTS PASSED! MaterialX addon is working correctly with real-world materials.
 ```
+
+## 📁 Exported Files
+
+After running the test suite, all exported MaterialX files are preserved in the `test_output_mtlx/` directory. This allows you to:
+
+- **Inspect the actual output** to verify export quality
+- **Identify issues** that might not be caught by validation
+- **Compare different material exports** to understand the exporter behavior
+- **Debug specific problems** by examining the generated MaterialX structure
+
+The test script will list all exported files with their sizes, making it easy to identify which materials were successfully exported.
 
 ## 🔧 Troubleshooting
 

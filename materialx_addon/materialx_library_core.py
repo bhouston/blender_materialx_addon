@@ -598,6 +598,10 @@ class MaterialXDocumentManager:
             
             # Create working document
             self.document = mx.createDocument()
+            
+            # Set colorspace attribute (required for MaterialX compliance)
+            self.document.setColorSpace("lin_rec709")
+            
             self.logger.info(f"Working document has {len(self.document.getNodeDefs())} node definitions before import")
             self.document.importLibrary(self.libraries)
             self.logger.info(f"Working document has {len(self.document.getNodeDefs())} node definitions after import")
@@ -1390,6 +1394,43 @@ class MaterialXNodeBuilder:
             'default': 'color3',
             'surfaceshader': 'surfaceshader',
             'normal': 'vector3',
+            'tangent': 'vector3',
+            
+            # Standard surface specific mappings
+            'base': 'float',
+            'base_color': 'color3',
+            'metalness': 'float',
+            'specular': 'float',
+            'specular_color': 'color3',
+            'specular_roughness': 'float',
+            'specular_ior': 'float',
+            'transmission': 'float',
+            'transmission_color': 'color3',
+            'transmission_depth': 'float',
+            'transmission_scatter': 'color3',
+            'transmission_scatter_anisotropy': 'float',
+            'transmission_dispersion': 'float',
+            'transmission_extra_roughness': 'float',
+            'opacity': 'color3',
+            'emission': 'float',
+            'emission_color': 'color3',
+            'subsurface': 'float',
+            'subsurface_color': 'color3',
+            'subsurface_radius': 'color3',
+            'subsurface_scale': 'float',
+            'subsurface_anisotropy': 'float',
+            'sheen': 'float',
+            'sheen_color': 'color3',
+            'sheen_tint': 'float',
+            'sheen_roughness': 'float',
+            'coat': 'float',
+            'coat_color': 'color3',
+            'coat_roughness': 'float',
+            'coat_ior': 'float',
+            'coat_normal': 'vector3',
+            'anisotropic': 'float',
+            'anisotropic_rotation': 'float',
+            'anisotropic_direction': 'vector3',
         }
         
         return type_mapping.get(input_name.lower(), 'color3')
@@ -1476,6 +1517,44 @@ class MaterialXConnectionManager:
             'rotate': 'float',
             'file': 'filename',
             'default': 'color3',
+            'normal': 'vector3',
+            'tangent': 'vector3',
+            
+            # Standard surface specific mappings
+            'base': 'float',
+            'base_color': 'color3',
+            'metalness': 'float',
+            'specular': 'float',
+            'specular_color': 'color3',
+            'specular_roughness': 'float',
+            'specular_ior': 'float',
+            'transmission': 'float',
+            'transmission_color': 'color3',
+            'transmission_depth': 'float',
+            'transmission_scatter': 'color3',
+            'transmission_scatter_anisotropy': 'float',
+            'transmission_dispersion': 'float',
+            'transmission_extra_roughness': 'float',
+            'opacity': 'color3',
+            'emission': 'float',
+            'emission_color': 'color3',
+            'subsurface': 'float',
+            'subsurface_color': 'color3',
+            'subsurface_radius': 'color3',
+            'subsurface_scale': 'float',
+            'subsurface_anisotropy': 'float',
+            'sheen': 'float',
+            'sheen_color': 'color3',
+            'sheen_tint': 'float',
+            'sheen_roughness': 'float',
+            'coat': 'float',
+            'coat_color': 'color3',
+            'coat_roughness': 'float',
+            'coat_ior': 'float',
+            'coat_normal': 'vector3',
+            'anisotropic': 'float',
+            'anisotropic_rotation': 'float',
+            'anisotropic_direction': 'vector3',
         }
         
         return type_mapping.get(input_name.lower(), 'color3')

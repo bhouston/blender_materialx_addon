@@ -172,23 +172,61 @@ NODE_SCHEMAS = {
         # 'file' handled separately
     ],
     'PRINCIPLED_BSDF': [
+        # Core surface properties
         {'blender': 'Base Color', 'mtlx': 'base_color', 'type': 'color3', 'category': 'surfaceshader'},
-        {'blender': 'Metallic', 'mtlx': 'metallic', 'type': 'float', 'category': 'surfaceshader'},
-        {'blender': 'Roughness', 'mtlx': 'roughness', 'type': 'float', 'category': 'surfaceshader'},
+        {'blender': 'Metallic', 'mtlx': 'metalness', 'type': 'float', 'category': 'surfaceshader'},
+        {'blender': 'Roughness', 'mtlx': 'specular_roughness', 'type': 'float', 'category': 'surfaceshader'},
         {'blender': 'Specular', 'mtlx': 'specular', 'type': 'float', 'category': 'surfaceshader'},
-        {'blender': 'IOR', 'mtlx': 'ior', 'type': 'float', 'category': 'surfaceshader'},
+        {'blender': 'Specular Tint', 'mtlx': 'specular_color', 'type': 'color3', 'category': 'surfaceshader'},
+        {'blender': 'IOR', 'mtlx': 'specular_IOR', 'type': 'float', 'category': 'surfaceshader'},
+        
+        # Transmission properties
         {'blender': 'Transmission', 'mtlx': 'transmission', 'type': 'float', 'category': 'surfaceshader'},
-        {'blender': 'Alpha', 'mtlx': 'opacity', 'type': 'float', 'category': 'surfaceshader'},
+        {'blender': 'Transmission Color', 'mtlx': 'transmission_color', 'type': 'color3', 'category': 'surfaceshader'},
+        {'blender': 'Transmission Depth', 'mtlx': 'transmission_depth', 'type': 'float', 'category': 'surfaceshader'},
+        {'blender': 'Transmission Scatter', 'mtlx': 'transmission_scatter', 'type': 'color3', 'category': 'surfaceshader'},
+        {'blender': 'Transmission Scatter Anisotropy', 'mtlx': 'transmission_scatter_anisotropy', 'type': 'float', 'category': 'surfaceshader'},
+        {'blender': 'Transmission Dispersion', 'mtlx': 'transmission_dispersion', 'type': 'float', 'category': 'surfaceshader'},
+        {'blender': 'Transmission Extra Roughness', 'mtlx': 'transmission_extra_roughness', 'type': 'float', 'category': 'surfaceshader'},
+        
+        # Opacity
+        {'blender': 'Alpha', 'mtlx': 'opacity', 'type': 'color3', 'category': 'surfaceshader'},
+        
+        # Normal mapping
         {'blender': 'Normal', 'mtlx': 'normal', 'type': 'vector3', 'category': 'surfaceshader'},
+        {'blender': 'Tangent', 'mtlx': 'tangent', 'type': 'vector3', 'category': 'surfaceshader'},
+        
+        # Emission properties
         {'blender': 'Emission Color', 'mtlx': 'emission_color', 'type': 'color3', 'category': 'surfaceshader'},
         {'blender': 'Emission Strength', 'mtlx': 'emission', 'type': 'float', 'category': 'surfaceshader'},
+        
+        # Subsurface properties
         {'blender': 'Subsurface', 'mtlx': 'subsurface', 'type': 'float', 'category': 'surfaceshader'},
+        {'blender': 'Subsurface Color', 'mtlx': 'subsurface_color', 'type': 'color3', 'category': 'surfaceshader'},
         {'blender': 'Subsurface Radius', 'mtlx': 'subsurface_radius', 'type': 'color3', 'category': 'surfaceshader'},
         {'blender': 'Subsurface Scale', 'mtlx': 'subsurface_scale', 'type': 'float', 'category': 'surfaceshader'},
         {'blender': 'Subsurface Anisotropy', 'mtlx': 'subsurface_anisotropy', 'type': 'float', 'category': 'surfaceshader'},
+        
+        # Sheen properties
         {'blender': 'Sheen', 'mtlx': 'sheen', 'type': 'float', 'category': 'surfaceshader'},
+        {'blender': 'Sheen Color', 'mtlx': 'sheen_color', 'type': 'color3', 'category': 'surfaceshader'},
         {'blender': 'Sheen Tint', 'mtlx': 'sheen_tint', 'type': 'float', 'category': 'surfaceshader'},
         {'blender': 'Sheen Roughness', 'mtlx': 'sheen_roughness', 'type': 'float', 'category': 'surfaceshader'},
+        
+        # Coat properties
+        {'blender': 'Coat', 'mtlx': 'coat', 'type': 'float', 'category': 'surfaceshader'},
+        {'blender': 'Coat Color', 'mtlx': 'coat_color', 'type': 'color3', 'category': 'surfaceshader'},
+        {'blender': 'Coat Roughness', 'mtlx': 'coat_roughness', 'type': 'float', 'category': 'surfaceshader'},
+        {'blender': 'Coat IOR', 'mtlx': 'coat_IOR', 'type': 'float', 'category': 'surfaceshader'},
+        {'blender': 'Coat Normal', 'mtlx': 'coat_normal', 'type': 'vector3', 'category': 'surfaceshader'},
+        
+        # Anisotropy properties
+        {'blender': 'Anisotropic', 'mtlx': 'anisotropic', 'type': 'float', 'category': 'surfaceshader'},
+        {'blender': 'Anisotropic Rotation', 'mtlx': 'anisotropic_rotation', 'type': 'float', 'category': 'surfaceshader'},
+        {'blender': 'Anisotropic Direction', 'mtlx': 'anisotropic_direction', 'type': 'vector3', 'category': 'surfaceshader'},
+        
+        # Base properties (should be included for completeness)
+        {'blender': 'Base', 'mtlx': 'base', 'type': 'float', 'category': 'surfaceshader'},
     ],
     'VECTOR_MATH': [
         {'blender': 'A', 'mtlx': 'in1', 'type': 'vector3', 'category': 'vector3'},
@@ -953,6 +991,42 @@ class NodeMapper:
         # Create surface shader node
         node_name = builder.add_surface_shader_node("standard_surface", f"surface_{node.name}")
         
+        # Default values for essential standard surface parameters
+        default_values = {
+            'base': 1.0,
+            'specular': 1.0,
+            'specular_color': [1.0, 1.0, 1.0],
+            'specular_roughness': 0.5,
+            'specular_IOR': 1.5,
+            'metalness': 0.0,
+            'transmission': 0.0,
+            'transmission_color': [1.0, 1.0, 1.0],
+            'transmission_depth': 0.0,
+            'transmission_scatter': [0.0, 0.0, 0.0],
+            'transmission_scatter_anisotropy': 0.0,
+            'transmission_dispersion': 0.0,
+            'transmission_extra_roughness': 0.0,
+            'opacity': [1.0, 1.0, 1.0],
+            'emission': 0.0,
+            'emission_color': [1.0, 1.0, 1.0],
+            'subsurface': 0.0,
+            'subsurface_color': [1.0, 1.0, 1.0],
+            'subsurface_radius': [1.0, 0.2, 0.1],
+            'subsurface_scale': 0.05,
+            'subsurface_anisotropy': 0.0,
+            'sheen': 0.0,
+            'sheen_color': [1.0, 1.0, 1.0],
+            'sheen_tint': 1.0,
+            'sheen_roughness': 0.5,
+            'coat': 0.0,
+            'coat_color': [1.0, 1.0, 1.0],
+            'coat_roughness': 0.1,
+            'coat_IOR': 1.5,
+            'anisotropic': 0.0,
+            'anisotropic_rotation': 0.0,
+            'anisotropic_direction': [0.0, 1.0, 0.0],
+        }
+        
         # Map inputs using enhanced schema with type information
         for entry in NODE_SCHEMAS['PRINCIPLED_BSDF']:
             blender_input = entry['blender']
@@ -976,6 +1050,37 @@ class NodeMapper:
                     )
                 else:
                     # Constant input - use type-safe input creation
+                    # Handle different value types properly
+                    if param_type == 'float':
+                        # For float inputs, extract the first component if it's a vector/color
+                        if isinstance(value_or_node, (list, tuple)) and len(value_or_node) > 0:
+                            value_or_node = value_or_node[0]
+                        # Use default if no value provided
+                        if value_or_node is None:
+                            value_or_node = default_values.get(mtlx_param, 0.0)
+                    elif param_type == 'color3':
+                        # For color3 inputs, ensure we have 3 components
+                        if isinstance(value_or_node, (list, tuple)):
+                            if len(value_or_node) >= 3:
+                                value_or_node = value_or_node[:3]
+                            else:
+                                # Pad with zeros if not enough components
+                                value_or_node = list(value_or_node) + [0.0] * (3 - len(value_or_node))
+                        # Use default if no value provided
+                        if value_or_node is None:
+                            value_or_node = default_values.get(mtlx_param, [1.0, 1.0, 1.0])
+                    elif param_type == 'vector3':
+                        # For vector3 inputs, ensure we have 3 components
+                        if isinstance(value_or_node, (list, tuple)):
+                            if len(value_or_node) >= 3:
+                                value_or_node = value_or_node[:3]
+                            else:
+                                # Pad with zeros if not enough components
+                                value_or_node = list(value_or_node) + [0.0] * (3 - len(value_or_node))
+                        # Use default if no value provided
+                        if value_or_node is None:
+                            value_or_node = default_values.get(mtlx_param, [0.0, 0.0, 0.0])
+                    
                     builder.library_builder.node_builder.create_mtlx_input(
                         builder.nodes[node_name], mtlx_param, 
                         value=value_or_node,
@@ -1436,10 +1541,71 @@ class NodeMapper:
     
     @staticmethod
     def map_color_ramp(node, builder: MaterialXBuilder, input_nodes: Dict, input_nodes_by_index: Dict = None, blender_node=None, constant_manager=None, exported_nodes=None) -> str:
-        """Map ColorRamp node to MaterialX ramp4 node."""
-        # For now, create a simple ramp4 node without complex input mapping
-        # TODO: Implement proper Color Ramp to MaterialX mapping
-        node_name = builder.add_node("ramp4", f"colorramp_{node.name}", "color3")
+        """Map ColorRamp node to MaterialX ramp node."""
+        # Create ramp node with proper type - use color4 since ramp outputs color4
+        node_name = builder.add_node("ramp", f"colorramp_{node.name}", "color4")
+        
+        # Extract Color Ramp data from Blender node
+        if hasattr(node, 'color_ramp'):
+            ramp = node.color_ramp
+            
+            # Set interpolation type
+            interpolation_map = {
+                'LINEAR': 0,
+                'CONSTANT': 2,
+                'EASING': 1,
+                'CARDINAL': 1,
+                'B_SPLINE': 1
+            }
+            interpolation = interpolation_map.get(ramp.interpolation, 1)
+            
+            # Get the number of elements (control points)
+            num_elements = len(ramp.elements)
+            num_intervals = max(2, num_elements - 1)  # At least 2 intervals
+            
+            # Set basic ramp properties
+            builder.library_builder.node_builder.create_mtlx_input(
+                builder.nodes[node_name], 'interpolation', 
+                value=interpolation,
+                node_type='ramp', category='color4'
+            )
+            
+            builder.library_builder.node_builder.create_mtlx_input(
+                builder.nodes[node_name], 'num_intervals', 
+                value=num_intervals,
+                node_type='ramp', category='color4'
+            )
+            
+            # Map control points (up to 10 supported by MaterialX)
+            for i in range(min(num_elements, 10)):
+                element = ramp.elements[i]
+                
+                # Set interval position
+                interval_name = f'interval{i+1}' if i > 0 else 'interval1'
+                builder.library_builder.node_builder.create_mtlx_input(
+                    builder.nodes[node_name], interval_name, 
+                    value=element.position,
+                    node_type='ramp', category='color4'
+                )
+                
+                # Set color (convert to color4)
+                color_name = f'color{i+1}' if i > 0 else 'color1'
+                color_value = [element.color[0], element.color[1], element.color[2], element.alpha]
+                builder.library_builder.node_builder.create_mtlx_input(
+                    builder.nodes[node_name], color_name, 
+                    value=color_value,
+                    node_type='ramp', category='color4'
+                )
+        
+        # Connect input if available
+        try:
+            is_connected, value_or_node, type_str = get_input_value_or_connection(node, 'Fac', exported_nodes)
+            if is_connected:
+                # Connect to texcoord input
+                builder.add_connection(value_or_node, 'out', node_name, 'texcoord')
+        except (KeyError, AttributeError):
+            pass
+        
         return node_name
     
     @staticmethod

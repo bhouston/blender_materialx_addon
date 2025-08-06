@@ -531,8 +531,12 @@ def run_comprehensive_test():
         # Get test blend files
         blend_files = get_test_blend_files()
         
-        # Create output directory
-        output_dir = tempfile.mkdtemp()
+        # Create output directory for exported MaterialX files
+        output_dir = "test_output_mtlx"
+        if os.path.exists(output_dir):
+            shutil.rmtree(output_dir)
+        os.makedirs(output_dir)
+        logger.info(f"📁 Exported MaterialX files will be saved to: {os.path.abspath(output_dir)}")
         
         export_results = []
         validation_results = []
@@ -584,8 +588,19 @@ def run_comprehensive_test():
             
             results['performance'] = performance_success
         
-        # Cleanup
-        shutil.rmtree(output_dir, ignore_errors=True)
+        # Keep exported files for inspection
+        logger.info(f"📁 Exported MaterialX files preserved in: {os.path.abspath(output_dir)}")
+        logger.info("   You can inspect these files to verify the export quality and identify any issues.")
+        
+        # List exported files
+        exported_files = list(Path(output_dir).glob("*.mtlx"))
+        if exported_files:
+            logger.info(f"📄 Exported {len(exported_files)} MaterialX files:")
+            for mtlx_file in sorted(exported_files):
+                file_size = mtlx_file.stat().st_size
+                logger.info(f"   - {mtlx_file.name} ({file_size} bytes)")
+        else:
+            logger.warning("⚠ No MaterialX files were exported")
         
     except Exception as e:
         logger.error(f"Test suite failed with exception: {e}")
@@ -652,6 +667,10 @@ TEST MATERIALS USED:
 ERROR CONDITION TESTS:
 - Emission shader (unsupported node type)
 - Fresnel node (unsupported node type)
+
+EXPORTED FILES:
+- MaterialX files are preserved in: test_output_mtlx/
+- Inspect these files to verify export quality and identify any issues
 
 {'='*80}
 """
