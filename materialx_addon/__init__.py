@@ -135,6 +135,10 @@ class MATERIALX_OT_export(Operator):
                 self.report({'INFO'}, message)
                 logger.info(f"✓ Export successful: {message}")
                 
+                # Store result for UI display
+                import json
+                context.scene.materialx_last_export_result = json.dumps(result)
+                
                 # Show warnings in UI if any
                 if 'validation_results' in result and result['validation_results'].get('warnings'):
                     for warning in result['validation_results']['warnings'][:3]:  # Show first 3 warnings
@@ -156,6 +160,11 @@ class MATERIALX_OT_export(Operator):
                 
                 self.report({'ERROR'}, error_message)
                 logger.error(f"✗ Export failed: {error_message}")
+                
+                # Store result for UI display
+                import json
+                context.scene.materialx_last_export_result = json.dumps(result)
+                
                 return {'CANCELLED'}
                 
         except Exception as e:
@@ -264,6 +273,17 @@ class MATERIALX_OT_export_all(Operator):
         successful = sum(1 for success in results.values() if success)
         total = len(results)
         
+        # Store result for UI display
+        import json
+        result_data = {
+            'success': successful == total,
+            'total_materials': total,
+            'successful_exports': successful,
+            'failed_exports': total - successful,
+            'results': results
+        }
+        context.scene.materialx_last_export_result = json.dumps(result_data)
+        
         if successful == total:
             self.report({'INFO'}, f"Successfully exported all {total} materials")
         else:
@@ -309,17 +329,8 @@ class MATERIALX_PT_panel(Panel):
         box = layout.box()
         box.label(text="Configuration", icon='SETTINGS')
         
-        # Get current configuration
-        config = getattr(context.scene, 'materialx_config', None)
-        if not config:
-            # Initialize default configuration
-            config = context.scene.materialx_config = {
-                'optimize_document': True,
-                'advanced_validation': True,
-                'performance_monitoring': True,
-                'strict_mode': False,
-                'continue_on_unsupported_nodes': True
-            }
+        # Get current configuration - use individual properties instead of a dict
+        # This avoids the UI context writing issue
         
         col = box.column(align=True)
         
@@ -335,34 +346,53 @@ class MATERIALX_PT_panel(Panel):
         
         # Status information
         if hasattr(context.scene, 'materialx_last_export_result'):
-            result = context.scene.materialx_last_export_result
-            if result:
-                box = layout.box()
-                box.label(text="Last Export Status", icon='INFO')
-                
-                if result.get('success'):
+            result_str = context.scene.materialx_last_export_result
+            if result_str:
+                try:
+                    import json
+                    result = json.loads(result_str)
+                    
+                    box = layout.box()
+                    box.label(text="Last Export Status", icon='INFO')
+                    
+                    if result.get('success'):
+                        col = box.column(align=True)
+                        col.label(text="✓ Export Successful", icon='CHECKMARK')
+                        
+                        # Handle single material export results
+                        if 'performance_stats' in result:
+                            stats = result['performance_stats']
+                            if 'total_time' in stats:
+                                col.label(text=f"Time: {stats['total_time']:.2f}s")
+                        
+                        if 'validation_results' in result:
+                            validation = result['validation_results']
+                            if validation.get('warnings'):
+                                col.label(text=f"Warnings: {len(validation['warnings'])}", icon='ERROR')
+                        
+                        # Handle export all results
+                        if 'total_materials' in result:
+                            col.label(text=f"Materials: {result['successful_exports']}/{result['total_materials']} exported")
+                    else:
+                        col = box.column(align=True)
+                        col.label(text="✗ Export Failed", icon='ERROR')
+                        
+                        if 'error' in result:
+                            col.label(text=f"Error: {result['error']}")
+                        
+                        if 'unsupported_nodes' in result and result['unsupported_nodes']:
+                            unsupported = result['unsupported_nodes']
+                            col.label(text=f"Unsupported: {len(unsupported)} nodes")
+                        
+                        # Handle export all failure results
+                        if 'failed_exports' in result:
+                            col.label(text=f"Failed: {result['failed_exports']}/{result['total_materials']} materials")
+                except (json.JSONDecodeError, KeyError):
+                    # If JSON parsing fails, just show the raw string
+                    box = layout.box()
+                    box.label(text="Last Export Status", icon='INFO')
                     col = box.column(align=True)
-                    col.label(text="✓ Export Successful", icon='CHECKMARK')
-                    
-                    if 'performance_stats' in result:
-                        stats = result['performance_stats']
-                        if 'total_time' in stats:
-                            col.label(text=f"Time: {stats['total_time']:.2f}s")
-                    
-                    if 'validation_results' in result:
-                        validation = result['validation_results']
-                        if validation.get('warnings'):
-                            col.label(text=f"Warnings: {len(validation['warnings'])}", icon='ERROR')
-                else:
-                    col = box.column(align=True)
-                    col.label(text="✗ Export Failed", icon='ERROR')
-                    
-                    if 'error' in result:
-                        col.label(text=f"Error: {result['error']}")
-                    
-                    if 'unsupported_nodes' in result and result['unsupported_nodes']:
-                        unsupported = result['unsupported_nodes']
-                        col.label(text=f"Unsupported: {len(unsupported)} nodes")
+                    col.label(text=f"Status: {result_str}")
 
 
 # Add properties to scene for configuration
@@ -397,6 +427,7 @@ def register_properties():
         default=True
     )
     
+    # Store export result as a JSON string to preserve structure
     bpy.types.Scene.materialx_last_export_result = bpy.props.StringProperty(
         name="Last Export Result",
         description="Result of the last MaterialX export operation",
