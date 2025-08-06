@@ -1388,6 +1388,7 @@ class MaterialXNodeBuilder:
             'rotate': 'float',
             'file': 'filename',
             'default': 'color3',
+            'surfaceshader': 'surfaceshader',
         }
         
         return type_mapping.get(input_name.lower(), 'color3')
@@ -1672,6 +1673,8 @@ class MaterialXLibraryBuilder:
             # Connect to nodegraph output
             if self.nodegraph:
                 output = self.node_builder.add_output(self.nodegraph, input_name, input_type, nodename or input_name)
+                # Connect surface shader input to nodegraph output
+                self.node_builder.create_mtlx_input(surface_node, input_name, nodename=f"{nodegraph_name}.{input_name}")
         elif nodename:
             # Connect to specific node
             self.node_builder.create_mtlx_input(surface_node, input_name, nodename=nodename)
