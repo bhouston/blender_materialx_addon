@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-MaterialX Library Core - Phase 1 Implementation
+MaterialX Library Core - Phase 1 & 2 Implementation
 
 This module implements the core infrastructure migration from manual XML generation
 to MaterialX library APIs as outlined in the integration plan.
@@ -9,6 +9,11 @@ Phase 1: Core Infrastructure Migration
 - Replace XML generation with MaterialX library
 - Implement library loading system
 - Create MaterialX document builder
+
+Phase 2: Node Mapping System Enhancement
+- Leverage node definitions for type-safe mapping
+- Implement automatic type conversion and validation
+- Enhanced node creation with validation
 """
 
 import MaterialX as mx
@@ -151,6 +156,40 @@ class MaterialXDocumentManager:
             self.logger.error(f"Error looking up node definition {node_type}: {str(e)}")
             return None
     
+    def get_input_definition(self, node_type: str, input_name: str, category: str = None) -> Optional[mx.Input]:
+        """
+        Get an input definition from a node definition.
+        
+        Args:
+            node_type: The node type
+            input_name: The input name
+            category: Optional category filter
+            
+        Returns:
+            mx.Input: The input definition or None if not found
+        """
+        nodedef = self.get_node_definition(node_type, category)
+        if nodedef:
+            return nodedef.getInput(input_name)
+        return None
+    
+    def get_output_definition(self, node_type: str, output_name: str, category: str = None) -> Optional[mx.Output]:
+        """
+        Get an output definition from a node definition.
+        
+        Args:
+            node_type: The node type
+            output_name: The output name
+            category: Optional category filter
+            
+        Returns:
+            mx.Output: The output definition or None if not found
+        """
+        nodedef = self.get_node_definition(node_type, category)
+        if nodedef:
+            return nodedef.getOutput(output_name)
+        return None
+    
     def validate_document(self) -> bool:
         """
         Validate the MaterialX document.
@@ -174,15 +213,198 @@ class MaterialXDocumentManager:
             return False
 
 
+class MaterialXTypeConverter:
+    """
+    Handles type conversion and validation for MaterialX inputs and outputs.
+    
+    This class provides:
+    - Automatic type conversion between Blender and MaterialX types
+    - Type validation and compatibility checking
+    - Value formatting for different MaterialX types
+    """
+    
+    def __init__(self, logger):
+        self.logger = logger
+        
+        # Type compatibility mapping
+        self.type_compatibility = {
+            'color3': ['color3', 'vector3'],
+            'vector3': ['vector3', 'color3'],
+            'vector2': ['vector2'],
+            'vector4': ['vector4', 'color4'],
+            'color4': ['color4', 'vector4'],
+            'float': ['float'],
+            'filename': ['filename'],
+            'string': ['string'],
+            'integer': ['integer'],
+            'boolean': ['boolean']
+        }
+        
+        # Blender to MaterialX type mapping
+        self.blender_to_mtlx_types = {
+            'RGBA': 'color4',
+            'RGB': 'color3',
+            'VECTOR': 'vector3',
+            'VECTOR_2D': 'vector2',
+            'VALUE': 'float',
+            'INT': 'integer',
+            'BOOLEAN': 'boolean',
+            'STRING': 'string'
+        }
+    
+    def convert_blender_type(self, blender_type: str) -> str:
+        """
+        Convert a Blender socket type to MaterialX type.
+        
+        Args:
+            blender_type: The Blender socket type
+            
+        Returns:
+            str: The corresponding MaterialX type
+        """
+        return self.blender_to_mtlx_types.get(blender_type, 'color3')
+    
+    def validate_type_compatibility(self, from_type: str, to_type: str) -> bool:
+        """
+        Validate if a type conversion is compatible.
+        
+        Args:
+            from_type: The source type
+            to_type: The target type
+            
+        Returns:
+            bool: True if conversion is compatible
+        """
+        # Direct match
+        if from_type == to_type:
+            return True
+        
+        # Check compatibility mapping
+        if from_type in self.type_compatibility:
+            compatible_types = self.type_compatibility[from_type]
+            if to_type in compatible_types:
+                return True
+        
+        # Special cases
+        if from_type == 'color3' and to_type == 'vector3':
+            return True
+        if from_type == 'vector3' and to_type == 'color3':
+            return True
+        if from_type == 'color4' and to_type == 'vector4':
+            return True
+        if from_type == 'vector4' and to_type == 'color4':
+            return True
+        
+        self.logger.warning(f"Type incompatibility: {from_type} -> {to_type}")
+        return False
+    
+    def convert_value(self, value: Any, target_type: str) -> Any:
+        """
+        Convert a value to the target MaterialX type.
+        
+        Args:
+            value: The value to convert
+            target_type: The target MaterialX type
+            
+        Returns:
+            Any: The converted value
+        """
+        try:
+            if target_type == 'float':
+                return float(value)
+            elif target_type == 'integer':
+                return int(value)
+            elif target_type == 'boolean':
+                return bool(value)
+            elif target_type == 'string':
+                return str(value)
+            elif target_type == 'color3':
+                if isinstance(value, (list, tuple)):
+                    if len(value) >= 3:
+                        return [float(value[0]), float(value[1]), float(value[2])]
+                    elif len(value) == 1:
+                        return [float(value[0]), float(value[0]), float(value[0])]
+                else:
+                    val = float(value)
+                    return [val, val, val]
+            elif target_type == 'vector3':
+                if isinstance(value, (list, tuple)):
+                    if len(value) >= 3:
+                        return [float(value[0]), float(value[1]), float(value[2])]
+                    elif len(value) == 1:
+                        return [float(value[0]), float(value[0]), float(value[0])]
+                else:
+                    val = float(value)
+                    return [val, val, val]
+            elif target_type == 'vector2':
+                if isinstance(value, (list, tuple)):
+                    if len(value) >= 2:
+                        return [float(value[0]), float(value[1])]
+                    elif len(value) == 1:
+                        return [float(value[0]), float(value[0])]
+                else:
+                    val = float(value)
+                    return [val, val]
+            elif target_type == 'color4':
+                if isinstance(value, (list, tuple)):
+                    if len(value) >= 4:
+                        return [float(value[0]), float(value[1]), float(value[2]), float(value[3])]
+                    elif len(value) >= 3:
+                        return [float(value[0]), float(value[1]), float(value[2]), 1.0]
+                    elif len(value) == 1:
+                        return [float(value[0]), float(value[0]), float(value[0]), 1.0]
+                else:
+                    val = float(value)
+                    return [val, val, val, 1.0]
+            
+            return value
+            
+        except Exception as e:
+            self.logger.error(f"Error converting value {value} to type {target_type}: {str(e)}")
+            return value
+    
+    def format_value_string(self, value: Any, value_type: str) -> str:
+        """
+        Format a value as a MaterialX value string.
+        
+        Args:
+            value: The value to format
+            value_type: The MaterialX type
+            
+        Returns:
+            str: The formatted value string
+        """
+        try:
+            if isinstance(value, (int, float)):
+                return f"{value:.4g}"
+            elif isinstance(value, (list, tuple)):
+                # Handle vector/color types
+                if value_type in ['color3', 'vector3'] and len(value) >= 3:
+                    return f"{value[0]:.4g},{value[1]:.4g},{value[2]:.4g}"
+                elif value_type in ['color4', 'vector4'] and len(value) >= 4:
+                    return f"{value[0]:.4g},{value[1]:.4g},{value[2]:.4g},{value[3]:.4g}"
+                elif value_type in ['vector2'] and len(value) >= 2:
+                    return f"{value[0]:.4g},{value[1]:.4g}"
+                else:
+                    return ",".join(f"{v:.4g}" for v in value)
+            else:
+                return str(value)
+                
+        except Exception as e:
+            self.logger.error(f"Error formatting value {value} for type {value_type}: {str(e)}")
+            return str(value)
+
+
 class MaterialXNodeBuilder:
     """
     Handles node creation using MaterialX library.
     
     This class provides:
-    - Type-safe node creation
-    - Input/output handling
-    - Connection management
+    - Type-safe node creation with proper node definitions
+    - Input/output handling with automatic type conversion
+    - Connection management using mtlxutils
     - Value formatting and validation
+    - Nodegraph creation and management
     """
     
     def __init__(self, document_manager: MaterialXDocumentManager, logger):
@@ -190,6 +412,7 @@ class MaterialXNodeBuilder:
         self.logger = logger
         self.node_counter = 0
         self.created_nodes = {}
+        self.type_converter = MaterialXTypeConverter(logger)
         
     def add_node(self, node_type: str, name: str, category: str = None, 
                  parent: mx.Element = None) -> Optional[mx.Node]:
@@ -268,10 +491,60 @@ class MaterialXNodeBuilder:
             self.logger.error(f"Failed to create nodegraph {name}: {str(e)}")
             return None
     
+    def create_mtlx_input(self, node: mx.Node, input_name: str, value: Any = None, 
+                         nodename: str = None, node_type: str = None, category: str = None) -> Optional[mx.Input]:
+        """
+        Create a MaterialX input with type-safe handling.
+        
+        Args:
+            node: The target node
+            input_name: The input name
+            value: The input value (for constant inputs)
+            nodename: The connected node name (for connections)
+            node_type: The node type for definition lookup
+            category: The node category for definition lookup
+            
+        Returns:
+            mx.Input: The created input or None if failed
+        """
+        try:
+            # Get input definition for type information
+            input_def = None
+            if node_type:
+                input_def = self.doc_manager.get_input_definition(node_type, input_name, category)
+            
+            # Determine input type
+            if input_def:
+                input_type = input_def.getType()
+            else:
+                # Fallback type determination
+                input_type = self._get_input_type_from_name(input_name)
+            
+            # Create input
+            input_elem = node.addInput(input_name, input_type)
+            
+            if input_elem:
+                if value is not None:
+                    # Convert and set constant value
+                    converted_value = self.type_converter.convert_value(value, input_type)
+                    formatted_value = self.type_converter.format_value_string(converted_value, input_type)
+                    input_elem.setValueString(formatted_value)
+                    self.logger.debug(f"Set input {input_name} = {formatted_value} (type: {input_type})")
+                elif nodename:
+                    # Set connection
+                    input_elem.setNodeName(nodename)
+                    self.logger.debug(f"Connected input {input_name} to {nodename}")
+            
+            return input_elem
+            
+        except Exception as e:
+            self.logger.error(f"Failed to create input {input_name} for node {node.getName()}: {str(e)}")
+            return None
+    
     def add_input(self, node: mx.Node, input_name: str, input_type: str, 
                   value: Any = None, nodename: str = None) -> Optional[mx.Input]:
         """
-        Add an input to a node.
+        Add an input to a node (legacy method for backward compatibility).
         
         Args:
             node: The target node
@@ -283,25 +556,7 @@ class MaterialXNodeBuilder:
         Returns:
             mx.Input: The created input or None if failed
         """
-        try:
-            input_elem = node.addInput(input_name, input_type)
-            
-            if input_elem:
-                if value is not None:
-                    # Set constant value
-                    formatted_value = self._format_value(value, input_type)
-                    input_elem.setValueString(formatted_value)
-                    self.logger.debug(f"Set input {input_name} = {formatted_value}")
-                elif nodename:
-                    # Set connection
-                    input_elem.setNodeName(nodename)
-                    self.logger.debug(f"Connected input {input_name} to {nodename}")
-            
-            return input_elem
-            
-        except Exception as e:
-            self.logger.error(f"Failed to add input {input_name} to node {node.getName()}: {str(e)}")
-            return None
+        return self.create_mtlx_input(node, input_name, value, nodename)
     
     def add_output(self, nodegraph: mx.NodeGraph, name: str, output_type: str, 
                    nodename: str) -> Optional[mx.Output]:
@@ -334,7 +589,7 @@ class MaterialXNodeBuilder:
     def connect_nodes(self, from_node: mx.Node, from_output: str, 
                      to_node: mx.Node, to_input: str) -> bool:
         """
-        Connect two nodes.
+        Connect two nodes with type validation.
         
         Args:
             from_node: The source node
@@ -346,6 +601,19 @@ class MaterialXNodeBuilder:
             bool: True if connection successful
         """
         try:
+            # Get output and input definitions for type checking
+            from_output_def = from_node.getActiveOutput(from_output)
+            to_input_def = to_node.getActiveInput(to_input)
+            
+            if from_output_def and to_input_def:
+                from_type = from_output_def.getType()
+                to_type = to_input_def.getType()
+                
+                # Validate type compatibility
+                if not self.type_converter.validate_type_compatibility(from_type, to_type):
+                    self.logger.warning(f"Type mismatch in connection: {from_type} -> {to_type}")
+                    return False
+            
             # Use mtlxutils for connection
             success = mxg.MtlxNodeGraph.connectNodeToNode(to_node, to_input, from_node, from_output)
             
@@ -360,36 +628,36 @@ class MaterialXNodeBuilder:
             self.logger.error(f"Error connecting nodes: {str(e)}")
             return False
     
-    def _format_value(self, value: Any, value_type: str) -> str:
+    def _get_input_type_from_name(self, input_name: str) -> str:
         """
-        Format a value for MaterialX XML.
+        Get the expected type for an input based on its name.
         
         Args:
-            value: The value to format
-            value_type: The MaterialX type
+            input_name: The input name
             
         Returns:
-            str: The formatted value string
+            str: The expected input type
         """
-        try:
-            if isinstance(value, (int, float)):
-                return f"{value:.4g}"
-            elif isinstance(value, (list, tuple)):
-                # Handle vector/color types
-                if value_type in ['color3', 'vector3'] and len(value) >= 3:
-                    return f"{value[0]:.4g},{value[1]:.4g},{value[2]:.4g}"
-                elif value_type in ['color4', 'vector4'] and len(value) >= 4:
-                    return f"{value[0]:.4g},{value[1]:.4g},{value[2]:.4g},{value[3]:.4g}"
-                elif value_type in ['vector2'] and len(value) >= 2:
-                    return f"{value[0]:.4g},{value[1]:.4g}"
-                else:
-                    return ",".join(f"{v:.4g}" for v in value)
-            else:
-                return str(value)
-                
-        except Exception as e:
-            self.logger.error(f"Error formatting value {value} for type {value_type}: {str(e)}")
-            return str(value)
+        # Common input type mappings
+        type_mapping = {
+            'texcoord': 'vector2',
+            'in': 'color3',
+            'in1': 'color3',
+            'in2': 'color3',
+            'a': 'color3',
+            'b': 'color3',
+            'factor': 'float',
+            'scale': 'float',
+            'strength': 'float',
+            'amount': 'float',
+            'pivot': 'vector2',
+            'translate': 'vector2',
+            'rotate': 'float',
+            'file': 'filename',
+            'default': 'color3',
+        }
+        
+        return type_mapping.get(input_name.lower(), 'color3')
 
 
 class MaterialXConnectionManager:
@@ -568,11 +836,13 @@ class MaterialXLibraryBuilder:
             node_name = node.getName()
             self.nodes[node_name] = node
             
-            # Add parameters as inputs
+            # Add parameters as inputs using type-safe method
             for param_name, param_value in params.items():
                 if param_value is not None:
-                    param_type = self._get_param_type(param_value)
-                    self.node_builder.add_input(node, param_name, param_type, param_value)
+                    self.node_builder.create_mtlx_input(
+                        node, param_name, param_value, 
+                        node_type=node_type, category=node_type_category
+                    )
             
             return node_name
         else:
@@ -602,11 +872,13 @@ class MaterialXLibraryBuilder:
             self.nodes[node_name] = node
             self.surface_shader = node
             
-            # Add parameters as inputs
+            # Add parameters as inputs using type-safe method
             for param_name, param_value in params.items():
                 if param_value is not None:
-                    param_type = self._get_param_type(param_value)
-                    self.node_builder.add_input(node, param_name, param_type, param_value)
+                    self.node_builder.create_mtlx_input(
+                        node, param_name, param_value, 
+                        node_type=node_type, category='surfaceshader'
+                    )
             
             return node_name
         else:
@@ -657,10 +929,10 @@ class MaterialXLibraryBuilder:
                 output = self.node_builder.add_output(self.nodegraph, input_name, input_type, nodename or input_name)
         elif nodename:
             # Connect to specific node
-            self.node_builder.add_input(surface_node, input_name, input_type, nodename=nodename)
+            self.node_builder.create_mtlx_input(surface_node, input_name, nodename=nodename)
         elif value is not None:
             # Set constant value
-            self.node_builder.add_input(surface_node, input_name, input_type, value)
+            self.node_builder.create_mtlx_input(surface_node, input_name, value)
     
     def add_output(self, name: str, output_type: str, nodename: str):
         """
@@ -687,7 +959,7 @@ class MaterialXLibraryBuilder:
         
         if self.material_node and self.surface_shader:
             # Connect material to surface shader
-            self.node_builder.add_input(self.material_node, 'surfaceshader', 'surfaceshader', nodename=surface_node_name)
+            self.node_builder.create_mtlx_input(self.material_node, 'surfaceshader', nodename=surface_node_name)
     
     def _get_param_type(self, value) -> str:
         """
