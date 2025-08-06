@@ -389,8 +389,21 @@ def create_test_scene_and_save(material_func, filename):
     if os.path.exists(backup_path):
         os.remove(backup_path)
     
-    # Save the file (this will overwrite if it exists)
-    bpy.ops.wm.save_as_mainfile(filepath=output_path)
+    # Save to a temporary location first to avoid backup creation
+    temp_path = f"examples/blender/temp_{filename}.blend"
+    bpy.ops.wm.save_as_mainfile(filepath=temp_path)
+    
+    # Move the file to overwrite the existing one
+    if os.path.exists(output_path):
+        os.remove(output_path)
+    os.rename(temp_path, output_path)
+    
+    # Clean up any other temporary files that might exist
+    for temp_file in os.listdir("examples/blender"):
+        if temp_file.startswith("temp_") and temp_file.endswith(".blend"):
+            temp_file_path = os.path.join("examples/blender", temp_file)
+            if temp_file_path != temp_path:  # Don't delete the one we just moved
+                os.remove(temp_file_path)
     
     print(f"Created: {output_path}")
     return output_path

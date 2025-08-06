@@ -15,3 +15,7 @@ MaterialX.v1.38.PBRSpec.pdf
 *.blend7
 *.blend8
 *.blend9
+
+# Temporary files
+temp_*.blend
+examples/blender/*.blend
