@@ -347,12 +347,12 @@ try:
     print(f"Fresnel material result: {{result2}}")
     
     # Check if we got helpful error messages
-    if not result1.get('success', False) and 'unsupported' in str(result1).lower():
+    if result1.get('unsupported_nodes') and len(result1.get('unsupported_nodes', [])) > 0:
         print("✓ Emission material correctly identified as unsupported")
     else:
         print("✗ Emission material should have been identified as unsupported")
     
-    if not result2.get('success', False) and 'unsupported' in str(result2).lower():
+    if result2.get('unsupported_nodes') and len(result2.get('unsupported_nodes', [])) > 0:
         print("✓ Fresnel material correctly identified as unsupported")
     else:
         print("✗ Fresnel material should have been identified as unsupported")
@@ -461,11 +461,8 @@ def validate_materialx_file(file_path: str) -> bool:
         
         logger.info(f"✓ Found {len(nodegraphs)} nodegraphs and {len(materials)} materials")
         
-        # Check for standard_surface nodes
-        standard_surfaces = []
-        for nodegraph in nodegraphs:
-            for node in nodegraph.findall('standard_surface'):
-                standard_surfaces.append(node)
+        # Check for standard_surface nodes (direct children of materialx root)
+        standard_surfaces = root.findall('standard_surface')
         
         if standard_surfaces:
             logger.info(f"✓ Found {len(standard_surfaces)} standard_surface nodes")

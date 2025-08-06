@@ -868,11 +868,21 @@ class MaterialXExporter:
                 self.logger.error(f"✗ No Principled BSDF node found in material '{self.material.name}'")
                 self.logger.error("💡 This addon only supports materials that use Principled BSDF nodes.")
                 self.logger.error("💡 Available node types in your material:")
+                
+                # Check for unsupported nodes and record them
+                node_types = []
                 for node in self.material.node_tree.nodes:
+                    node_types.append(node.type)
                     self.logger.error(f"    - {node.name}: {node.type}")
+                    
+                    # Check if this is an unsupported node type
+                    if node.type in ['EMISSION', 'FRESNEL']:
+                        self.unsupported_nodes.append({
+                            "name": node.name,
+                            "type": node.type
+                        })
                 
                 # Provide specific guidance based on what nodes are present
-                node_types = [node.type for node in self.material.node_tree.nodes]
                 if 'EMISSION' in node_types:
                     self.logger.error("💡 Suggestion: Replace the Emission shader with a Principled BSDF node.")
                     self.logger.error("💡 Use 'Emission Color' and 'Emission Strength' inputs on the Principled BSDF instead.")
@@ -884,6 +894,7 @@ class MaterialXExporter:
                     self.logger.error("💡 The Principled BSDF is the standard shader for physically-based rendering in Blender.")
                 
                 result["error"] = "No Principled BSDF node found"
+                result["unsupported_nodes"] = self.unsupported_nodes
                 return result
             
             self.logger.info(f"Found Principled BSDF node: {principled_node.name}")
