@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """
-Blender MaterialX Exporter
+Blender MaterialX Exporter - Phase 1 MaterialX Library Integration
 
 A Python script that exports Blender materials to MaterialX (.mtlx) format,
-replicating the functionality of Blender's C++ MaterialX exporter.
+using the MaterialX Python library for robust and validated output.
 
 Usage:
     import blender_materialx_exporter as mtlx_exporter
@@ -13,11 +13,18 @@ Usage:
 import bpy
 import os
 import shutil
-import xml.etree.ElementTree as ET
-from xml.dom import minidom
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple, Any, Union
 import math
+
+# Import the new MaterialX library core
+try:
+    from . import materialx_library_core
+    from .materialx_library_core import MaterialXLibraryBuilder, MaterialXDocumentManager
+except ImportError:
+    # Fallback for direct import
+    import materialx_library_core
+    from materialx_library_core import MaterialXLibraryBuilder, MaterialXDocumentManager
 
 
 def get_input_value_or_connection(node, input_name, exported_nodes=None) -> Tuple[bool, Any, str]:
@@ -192,175 +199,46 @@ def map_node_with_schema(node, builder, schema, node_type, node_category, consta
 
 
 class MaterialXBuilder:
-    """Builds MaterialX XML documents."""
+    """Builds MaterialX XML documents using MaterialX library."""
     
     def __init__(self, material_name: str, logger, version: str = "1.38" ):
         self.material_name = material_name
         self.version = version
-        self.node_counter = 0
-        self.nodes = {}
-        self.connections = []
         self.logger = logger
 
-        # Create root element
-        self.root = ET.Element("materialx")
-        self.root.set("version", version)
-        
-        # Create material first (outside nodegraph)
-        self.material = ET.SubElement(self.root, "surfacematerial")
-        self.material.set("name", material_name)
-        self.material.set("type", "material")
-        
-        # Create nodegraph
-        self.nodegraph = ET.SubElement(self.root, "nodegraph")
-        self.nodegraph.set("name", material_name)
+        # Use the MaterialX library-based builder
+        self.library_builder = MaterialXLibraryBuilder(material_name, logger, version)
+        self.logger.info("Using MaterialX library-based builder")
     
     def add_node(self, node_type: str, name: str, node_type_category: str = None, **params) -> str:
         """Add a node to the nodegraph."""
-        if not name:
-            name = f"{node_type}_{self.node_counter}"
-            self.node_counter += 1
-        node = ET.SubElement(self.nodegraph, node_type)
-        node.set("name", name)
-        if node_type_category:
-            node.set("type", node_type_category)
-        # Ensure ALL params are added as <input> elements, never as node attributes
-        for param_name, param_value in params.items():
-            if param_value is not None:
-                input_elem = ET.SubElement(node, "input")
-                input_elem.set("name", param_name)
-                input_elem.set("type", self._get_param_type(param_value))
-                input_elem.set("value", str(self._format_value(param_value)))
-        self.nodes[name] = node
-        return name
+        return self.library_builder.add_node(node_type, name, node_type_category, **params)
     
     def add_connection(self, from_node: str, from_output: str, to_node: str, to_input: str):
         """Add a connection between nodes using input tags with nodename."""
-        self.logger.debug(f"    *** ADDING CONNECTION: {from_node}.{from_output} -> {to_node}.{to_input} ***")
-        
-        # Find the target node
-        target_node = self.nodes.get(to_node)
-        if target_node is None:
-            self.logger.warning(f"Warning: Target node '{to_node}' not found for connection")
-            return
-        
-        # Create input element
-        input_elem = ET.SubElement(target_node, "input")
-        input_elem.set("name", to_input)
-        
-        # Determine the appropriate type based on the input name
-        input_type = self._get_input_type(to_input)
-        input_elem.set("type", input_type)
-        input_elem.set("nodename", from_node)
-        
-        # Store connection info for later processing
-        self.connections.append((from_node, from_output, to_node, to_input))
-        self.logger.debug(f"    *** CONNECTION ADDED SUCCESSFULLY ***")
+        self.library_builder.add_connection(from_node, from_output, to_node, to_input)
     
     def add_surface_shader_node(self, node_type: str, name: str, **params) -> str:
         """Add a surface shader node outside the nodegraph."""
-        if not name:
-            name = f"{node_type}_{self.node_counter}"
-            self.node_counter += 1
-        
-        node = ET.SubElement(self.root, node_type)
-        node.set("name", name)
-        node.set("type", "surfaceshader")
-        
-        # Add parameters
-        for param_name, param_value in params.items():
-            if param_value is not None:
-                input_elem = ET.SubElement(node, "input")
-                input_elem.set("name", param_name)
-                input_elem.set("type", self._get_param_type(param_value))
-                input_elem.set("value", str(self._format_value(param_value)))
-        
-        self.nodes[name] = node
-        return name
+        return self.library_builder.add_surface_shader_node(node_type, name, **params)
     
     def add_surface_shader_input(self, surface_node_name: str, input_name: str, input_type: str, nodegraph_name: str = None, nodename: str = None, value: str = None):
         """Add an input to a surface shader node."""
-        surface_node = self.nodes.get(surface_node_name)
-        if surface_node is None:
-            self.logger.warning(f"Warning: Surface shader node '{surface_node_name}' not found")
-            return
-        
-        input_elem = ET.SubElement(surface_node, "input")
-        input_elem.set("name", input_name)
-        input_elem.set("type", input_type)
-        
-        if nodegraph_name:
-            input_elem.set("output", input_name)  # Use the input name as the output name
-            input_elem.set("nodegraph", nodegraph_name)
-        elif nodename:
-            input_elem.set("nodename", nodename)
-        elif value is not None:
-            input_elem.set("value", str(value))
+        self.library_builder.add_surface_shader_input(surface_node_name, input_name, input_type, nodegraph_name, nodename, value)
     
     def add_output(self, name: str, output_type: str, nodename: str):
         """Add an output node to the nodegraph."""
-        output = ET.SubElement(self.nodegraph, "output")
-        output.set("name", name)
-        output.set("type", output_type)
-        output.set("nodename", nodename)
+        self.library_builder.add_output(name, output_type, nodename)
     
     def set_material_surface(self, surface_node_name: str):
         """Set the surface shader for the material."""
-        input_elem = ET.SubElement(self.material, "input")
-        input_elem.set("name", "surfaceshader")
-        input_elem.set("type", "surfaceshader")
-        input_elem.set("nodename", surface_node_name)
+        self.library_builder.set_material_surface(surface_node_name)
     
-    def _get_param_type(self, value) -> str:
-        """Determine the MaterialX type for a value."""
-        if isinstance(value, (int, float)):
-            return "float"
-        elif isinstance(value, (list, tuple)):
-            if len(value) == 2:
-                return "vector2"
-            elif len(value) == 3:
-                return "color3"
-            elif len(value) == 4:
-                return "color4"
-        return "string"
-    
-    def _format_value(self, value) -> str:
-        """Format a value for MaterialX XML."""
-        if isinstance(value, (int, float)):
-            return str(value)
-        elif isinstance(value, (list, tuple)):
-            return ", ".join(str(v) for v in value)
-        else:
-            return str(value)
-    
-    def _get_input_type(self, input_name: str) -> str:
-        """Determine the appropriate type for an input based on its name."""
-        # Map common input names to their expected types
-        type_mapping = {
-            'texcoord': 'vector2',
-            'in': 'color3',
-            'in1': 'color3',
-            'in2': 'color3',
-            'a': 'color3',
-            'b': 'color3',
-            'factor': 'float',
-            'scale': 'float',
-            'strength': 'float',
-            'amount': 'float',
-            'pivot': 'vector2',
-            'translate': 'vector2',
-            'rotate': 'float',
-            'file': 'filename',
-            'default': 'color3',
-        }
-        
-        return type_mapping.get(input_name.lower(), 'color3')
+
     
     def to_string(self) -> str:
         """Convert the document to a formatted XML string."""
-        rough_string = ET.tostring(self.root, 'unicode')
-        reparsed = minidom.parseString(rough_string)
-        return reparsed.toprettyxml(indent="  ")
+        return self.library_builder.to_string()
 
 
 class NodeMapper:
@@ -1240,11 +1118,14 @@ class MaterialXExporter:
             self.output_path.parent.mkdir(parents=True, exist_ok=True)
             
             self.logger.info(f"Writing MaterialX content to: {self.output_path}")
-            # Write the file
-            with open(self.output_path, 'w', encoding='utf-8') as f:
-                content = self.builder.to_string()
-                f.write(content)
-                self.logger.info(f"Successfully wrote {len(content)} characters to file")
+            
+            # Use library-based writing
+            success = self.builder.library_builder.write_to_file(str(self.output_path))
+            if success:
+                self.logger.info(f"Successfully wrote MaterialX document using library")
+            else:
+                self.logger.error("Failed to write document using library")
+                raise RuntimeError("Failed to write MaterialX document")
                 
         except PermissionError as e:
             self.logger.error(f"Permission error writing file: {e}")
