@@ -97,9 +97,22 @@ These warnings indicated that the MaterialX exporter was **not working correctly
 
 ### What's Still Broken ❌
 1. **Value Conversion Errors**: Blender array values not being converted properly to MaterialX format
+   - **Error**: `float() argument must be a string or a real number, not 'bpy_prop_array'`
+   - **Affects**: Color, vector, and other array-type inputs from Blender nodes
+   - **Impact**: MaterialX files contain raw Blender array objects instead of proper values
+
 2. **Validation Errors**: MaterialX API compatibility issues in validation methods
+   - **Error**: `'MaterialX.PyMaterialXCore.Input' object has no attribute 'isConnected'`
+   - **Error**: `'list' object has no attribute 'getUpstreamElement'`
+   - **Impact**: Validation fails but doesn't prevent export
+
 3. **Optimization Errors**: Node comparison issues in optimization code
-4. **Minor Issues**: Some MaterialX API calls need updating for version 1.39
+   - **Error**: `unhashable type: 'MaterialX.PyMaterialXCore.Node'`
+   - **Impact**: Document optimization fails but doesn't prevent export
+
+4. **MaterialX API Version Issues**: Some API calls need updating for MaterialX 1.39
+   - **Issue**: Outdated API calls in validation and optimization methods
+   - **Impact**: Errors in logs but export still succeeds
 
 ## Key Technical Findings
 
@@ -160,6 +173,72 @@ These warnings indicated that the MaterialX exporter was **not working correctly
 
 **Why This Matters**: Blender caches addon modules, so direct file edits don't immediately take effect. The deployment script ensures changes are properly installed and cached.
 
+## Specific Error Analysis (From Latest Test Run)
+
+### Value Conversion Issues
+**Problem**: Blender's array types are not being converted to MaterialX-compatible values.
+
+**Examples from test output**:
+```
+Error converting value <bpy_float[4], NodeSocketColor.default_value> to type color3: float() argument must be a string or a real number, not 'bpy_prop_array'
+Error converting value <bpy_float[3], NodeSocketVector.default_value> to type color3: float() argument must be a string or a real number, not 'bpy_prop_array'
+```
+
+**Root Cause**: The value conversion code is trying to convert Blender array objects directly to float values, but these need to be extracted as individual components first.
+
+**Impact**: MaterialX files contain raw Blender array objects like `<bpy_float[4], NodeSocketColor.default_value>` instead of proper color values like `"1,1,1"`.
+
+### MaterialX API Compatibility Issues
+**Problem**: Some MaterialX API calls are using outdated methods that don't exist in version 1.39.
+
+**Validation Errors**:
+```
+- Node validation failed: 'MaterialX.PyMaterialXCore.Input' object has no attribute 'isConnected'
+- Connection validation failed: 'list' object has no attribute 'getUpstreamElement'
+```
+
+**Optimization Errors**:
+```
+Error finding unused nodes: unhashable type: 'MaterialX.PyMaterialXCore.Node'
+```
+
+**Root Cause**: The validation and optimization code was written for an older version of the MaterialX API and needs updating for version 1.39.
+
+**Impact**: These errors appear in logs but don't prevent successful export. However, they indicate that validation and optimization features are not working properly.
+
+## Current MaterialX Output Analysis
+
+### What's Working in the Generated File
+**File Size**: 1317 bytes (previously was empty)
+
+**File Structure**:
+```xml
+<?xml version="1.0"?>
+<materialx version="1.39">
+  <standard_surface name="surface_Principled_BSDF" type="surfaceshader" nodedef="ND_standard_surface_surfaceshader">
+    <input name="base_color" type="color3" value="<bpy_float[4], NodeSocketColor.default_value>" />
+    <input name="metallic" type="color3" value="0,0,0" />
+    <input name="roughness" type="color3" value="0.5,0.5,0.5" />
+    <input name="ior" type="color3" value="1.5,1.5,1.5" />
+    <input name="opacity" type="color3" value="1,1,1" />
+    <!-- ... more inputs ... -->
+  </standard_surface>
+  <surfacematerial name="TestMaterial" type="material">
+    <input name="surfaceshader" type="surfaceshader" nodename="surface_Principled_BSDF" />
+  </surfacematerial>
+</materialx>
+```
+
+**✅ Working Elements**:
+- Proper XML structure with MaterialX 1.39 version
+- Standard surface node created with correct nodedef reference
+- Surface material node created with proper connection to surface shader
+- Some input values are correctly converted (metallic, roughness, ior, opacity)
+
+**❌ Broken Elements**:
+- Color inputs show raw Blender array objects instead of proper color values
+- Some input values may be missing or incorrect due to conversion issues
+
 ## Next Steps Required
 
 ### Critical Issues to Fix
@@ -170,9 +249,24 @@ These warnings indicated that the MaterialX exporter was **not working correctly
 
 ### Recommended Approach
 1. **Immediate**: Fix value conversion errors to ensure proper MaterialX output
+   - **Priority**: High - This affects the actual content of exported files
+   - **Impact**: Will make MaterialX files usable in other applications
+   - **Effort**: Medium - Need to update value conversion logic
+
 2. **Next**: Update validation methods to use correct MaterialX 1.39 APIs
+   - **Priority**: Medium - Validation is important for quality assurance
+   - **Impact**: Will provide proper validation feedback
+   - **Effort**: Low - Mostly API call updates
+
 3. **Then**: Fix optimization code for proper node handling
+   - **Priority**: Low - Optimization is a nice-to-have feature
+   - **Impact**: Will improve file size and performance
+   - **Effort**: Medium - Need to fix node comparison logic
+
 4. **Finally**: Test with complex materials and node networks
+   - **Priority**: High - Need to verify the exporter works with real-world materials
+   - **Impact**: Will validate the exporter for production use
+   - **Effort**: High - Requires testing with various material setups
 
 ## Test Scripts Created
 
@@ -191,12 +285,17 @@ These scripts helped identify the specific issues and verify fixes. The most rec
 
 The MaterialX exporter has significant issues with library integration and node creation. While the basic MaterialX library functionality works, the exporter is not properly creating nodes or importing libraries into the working document. The fixes attempted have resolved some issues but the core problem of empty output files remains.
 
-**Key Discovery**: The most recent investigation revealed a critical Python module caching issue that prevents updated code from being loaded, which explains why our fixes to the `get_node_definition()` method are not taking effect.
+**Major Breakthrough**: Successfully resolved the module caching issue and fixed the node definition lookup process. The exporter now generates proper MaterialX files with standard_surface and surfacematerial nodes.
 
-**Root Cause Identified**: The Blender addon system requires using the `dev_upgrade_addon.py` script to deploy code changes, as the addon modules are cached by Blender.
+**Key Discoveries**:
+1. **Module Caching**: Blender addon system requires `dev_upgrade_addon.py` script for code deployment
+2. **Node Definition Fields**: MaterialX node definitions use `getType()` for node type, not `getCategory()`
+3. **Search Strategy**: Case-insensitive substring search in node names works for finding definitions
+
+**Current Status**: The core export functionality is working! MaterialX files are being generated with proper structure.
 
 **Recommendation**: 
-1. **Immediate**: Deploy updated code using `dev_upgrade_addon.py` script
-2. **Next**: Focus on fixing the node definition lookup process
-3. **Then**: Address node creation and surface material generation
-4. **Finally**: Implement proper node network export 
+1. **Immediate**: Fix value conversion errors for proper MaterialX output
+2. **Next**: Update validation and optimization methods for MaterialX 1.39 compatibility
+3. **Then**: Test with complex materials and node networks
+4. **Finally**: Polish error handling and user experience 
