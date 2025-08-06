@@ -24,6 +24,7 @@ import bpy
 import os
 import shutil
 import time
+import logging
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple, Any, Union
 import math
@@ -273,6 +274,28 @@ class MaterialXBuilder:
     def validate(self) -> bool:
         """Validate document using enhanced validation."""
         return self.library_builder.validate()
+    
+    def set_write_options(self, **options):
+        """Set write options for the library builder."""
+        if hasattr(self.library_builder, 'set_write_options'):
+            self.library_builder.set_write_options(**options)
+    
+    def cleanup(self):
+        """Clean up resources."""
+        if hasattr(self.library_builder, 'cleanup'):
+            self.library_builder.cleanup()
+    
+    def optimize_document(self) -> bool:
+        """Optimize the document using enhanced library methods."""
+        if hasattr(self.library_builder, 'optimize_document'):
+            return self.library_builder.optimize_document()
+        return True  # Default to success if not available
+    
+    def get_performance_stats(self) -> Dict[str, Any]:
+        """Get performance statistics from the library builder."""
+        if hasattr(self.library_builder, 'get_performance_stats'):
+            return self.library_builder.get_performance_stats()
+        return {}  # Default to empty dict if not available
 
 
 class NodeMapper:
@@ -1142,12 +1165,23 @@ def format_socket_value(value):
 
 def export_material_to_materialx(material: bpy.types.Material, 
                                 output_path: str, 
-                                logger,
+                                logger=None,
                                 options: Dict = None) -> dict:
     """
     Export a Blender material to MaterialX format.
     Returns a dict with success, unsupported_nodes, output_path, and error (if any).
     """
+    # Initialize logging
+    if logger is None:
+        logger = logging.getLogger(__name__)
+        # Set up basic logging if not already configured
+        if not logger.handlers:
+            handler = logging.StreamHandler()
+            formatter = logging.Formatter('%(name)s - %(levelname)s - %(message)s')
+            handler.setFormatter(formatter)
+            logger.addHandler(handler)
+            logger.setLevel(logging.INFO)
+    
     logger.info("=" * 50)
     logger.info("EXPORT_MATERIAL_TO_MATERIALX: Function called")
     logger.info("=" * 50)
@@ -1191,71 +1225,5 @@ def export_all_materials_to_materialx(output_directory: str, logger, options: Di
     return results
 
 
-# Example usage and testing functions
-def create_test_material():
-    """Create a test material for demonstration."""
-    # Create a new material
-    material = bpy.data.materials.new(name="TestMaterial")
-    material.use_nodes = True
-    
-    # Get the node tree
-    nodes = material.node_tree.nodes
-    links = material.node_tree.links
-    
-    # Clear default nodes
-    nodes.clear()
-    
-    # Create Principled BSDF
-    principled = nodes.new(type='ShaderNodeBsdfPrincipled')
-    principled.location = (0, 0)
-    
-    # Create RGB node for base color
-    rgb = nodes.new(type='ShaderNodeRGB')
-    rgb.location = (-300, 0)
-    rgb.outputs[0].default_value = (0.8, 0.2, 0.2, 1.0)  # Red color
-    
-    # Create Value node for roughness
-    roughness = nodes.new(type='ShaderNodeValue')
-    roughness.location = (-300, -200)
-    roughness.outputs[0].default_value = 0.5
-    
-    # Create Material Output
-    output = nodes.new(type='ShaderNodeOutputMaterial')
-    output.location = (300, 0)
-    
-    # Connect nodes
-    links.new(rgb.outputs[0], principled.inputs['Base Color'])
-    links.new(roughness.outputs[0], principled.inputs['Roughness'])
-    links.new(principled.outputs[0], output.inputs['Surface'])
-    
-    return material
-
-
-def test_export():
-    """Test the MaterialX exporter with a simple material."""
-    # Create test material
-    material = create_test_material()
-    
-    # Export options
-    options = {
-        'active_uvmap': 'UVMap',
-        'export_textures': False,
-        'materialx_version': '1.38',
-        'relative_paths': True,
-    }
-    
-    # Export the material
-    success = export_material_to_materialx(material, "test_material.mtlx", options)
-    
-    if success["success"]:
-        logger.info("Test export successful!")
-        # Clean up test material
-        bpy.data.materials.remove(material)
-    else:
-        logger.error("Test export failed!")
-        logger.error(f"Unsupported nodes: {success['unsupported_nodes']}")
-
-
-if __name__ == "__main__":
-    # This will run when the script is executed directly
-    test_export() 
+# Note: Testing functions have been moved to test_blender_addon.py
+# This file now focuses on the core export functionality 

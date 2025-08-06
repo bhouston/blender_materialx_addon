@@ -98,50 +98,89 @@ class MATERIALX_OT_export(Operator):
             self.report({'ERROR'}, "No material selected")
             return {'CANCELLED'}
         
-        logger.info(f"Material selected: {context.material.name}")
-        logger.info(f"Material uses nodes: {context.material.use_nodes}")
-        logger.info(f"Output filepath: {self.filepath}")
-        logger.info(f"Export textures: {self.export_textures}")
-        logger.info(f"Copy textures: {self.copy_textures}")
-        logger.info(f"Relative paths: {self.relative_paths}")
-        
-        # Export options
-        options = {
-            'export_textures': self.export_textures,
-            'copy_textures': self.copy_textures,
-            'relative_paths': self.relative_paths,
-            'materialx_version': MATERIALX_VERSION,
-        }
-        
-        logger.info("Export options prepared, calling exporter...")
-        
         try:
-            # Export the material
-            logger.info("Calling blender_materialx_exporter.export_material_to_materialx...")
-            result = blender_materialx_exporter.export_material_to_materialx(
-                context.material, 
-                self.filepath, 
-                logger,
-                options
-            )
-            logger.info(f"Exporter returned: {result}")
+            # Enhanced export with better error handling
+            from . import blender_materialx_exporter
             
-            if isinstance(result, dict) and result.get('success'):
-                logger.info("SUCCESS: Material export completed successfully")
-                self.report({'INFO'}, f"Successfully exported material '{context.material.name}'")
+            # Configure export options
+            options = {
+                'export_textures': self.export_textures,
+                'copy_textures': self.copy_textures,
+                'relative_paths': self.relative_paths,
+                'optimize_document': True,
+                'advanced_validation': True,
+                'performance_monitoring': True
+            }
+            
+            result = blender_materialx_exporter.export_material_to_materialx(
+                context.material, self.filepath, logger, options
+            )
+            
+            if result['success']:
+                # Success with detailed information
+                message = f"Successfully exported '{context.material.name}' to MaterialX"
+                
+                # Add performance info if available
+                if 'performance_stats' in result and result['performance_stats']:
+                    stats = result['performance_stats']
+                    if 'total_time' in stats:
+                        message += f" (took {stats['total_time']:.2f}s)"
+                
+                # Add validation info if available
+                if 'validation_results' in result and result['validation_results']:
+                    validation = result['validation_results']
+                    if validation.get('warnings'):
+                        message += f" with {len(validation['warnings'])} warnings"
+                
+                self.report({'INFO'}, message)
+                logger.info(f"✓ Export successful: {message}")
+                
+                # Show warnings in UI if any
+                if 'validation_results' in result and result['validation_results'].get('warnings'):
+                    for warning in result['validation_results']['warnings'][:3]:  # Show first 3 warnings
+                        self.report({'WARNING'}, f"Warning: {warning}")
+                
                 return {'FINISHED'}
             else:
-                error_msg = result.get('error') if isinstance(result, dict) else str(result)
-                logger.error(f"FAILURE: Material export failed: {error_msg}")
-                self.report({'ERROR'}, f"Failed to export material '{context.material.name}': {error_msg}")
+                # Handle export failure with specific error information
+                error_message = "Export failed"
+                
+                if 'error' in result and result['error']:
+                    error_message = result['error']
+                elif 'unsupported_nodes' in result and result['unsupported_nodes']:
+                    unsupported = result['unsupported_nodes']
+                    if len(unsupported) == 1:
+                        error_message = f"Unsupported node: {unsupported[0]['type']}"
+                    else:
+                        error_message = f"Unsupported nodes: {len(unsupported)} nodes not supported"
+                
+                self.report({'ERROR'}, error_message)
+                logger.error(f"✗ Export failed: {error_message}")
                 return {'CANCELLED'}
                 
         except Exception as e:
-            import traceback
-            logger.error(f"EXCEPTION during export: {type(e).__name__}: {str(e)}")
-            logger.error("Full traceback:")
-            traceback.print_exc()
-            self.report({'ERROR'}, f"Export failed with exception: {str(e)}, {traceback.format_exc()}")
+            # Enhanced exception handling with specific error types
+            error_message = str(e)
+            
+            # Check if it's a MaterialX-specific error
+            if hasattr(e, 'error_type') and hasattr(e, 'get_user_friendly_message'):
+                error_message = e.get_user_friendly_message()
+                error_type = e.error_type
+                
+                # Provide specific guidance based on error type
+                if error_type == "library_loading":
+                    self.report({'ERROR'}, f"{error_message} Please ensure MaterialX is properly installed.")
+                elif error_type == "unsupported_node":
+                    self.report({'ERROR'}, f"{error_message} Consider using supported node types.")
+                elif error_type == "validation_error":
+                    self.report({'ERROR'}, f"{error_message} Check your material node setup.")
+                else:
+                    self.report({'ERROR'}, error_message)
+            else:
+                # Generic error handling
+                self.report({'ERROR'}, f"Export failed: {error_message}")
+            
+            logger.error(f"✗ Export exception: {error_message}")
             return {'CANCELLED'}
 
     def invoke(self, context, event):
@@ -247,27 +286,131 @@ class MATERIALX_PT_panel(Panel):
 
     def draw(self, context):
         layout = self.layout
-
-        if context.material:
-            # Export current material
-            row = layout.row()
-            row.operator("materialx.export", text="Export MaterialX")
-            
-            # Material info
-            box = layout.box()
-            box.label(text=f"SelectedMaterial: {context.material.name}")
-            
-            if context.material.use_nodes:
-                box.label(text="✓ Uses nodes", icon='CHECKMARK')
-            else:
-                box.label(text="✗ No nodes, not supported", icon='ERROR')
-        else:
-            layout.label(text="No material selected")
-
-        layout.separator()
         
-        # Export all materials
-        layout.operator("materialx.export_all", text="Export All Materials")
+        if not context.material:
+            layout.label(text="No material selected")
+            return
+        
+        # Main export section
+        box = layout.box()
+        box.label(text="Export MaterialX", icon='EXPORT')
+        
+        col = box.column(align=True)
+        col.operator("materialx.export", text="Export MaterialX", icon='EXPORT')
+        
+        # Export all materials section
+        box = layout.box()
+        box.label(text="Export All Materials", icon='MATERIAL')
+        
+        col = box.column(align=True)
+        col.operator("materialx.export_all", text="Export All Materials", icon='MATERIAL')
+        
+        # Configuration section
+        box = layout.box()
+        box.label(text="Configuration", icon='SETTINGS')
+        
+        # Get current configuration
+        config = getattr(context.scene, 'materialx_config', None)
+        if not config:
+            # Initialize default configuration
+            config = context.scene.materialx_config = {
+                'optimize_document': True,
+                'advanced_validation': True,
+                'performance_monitoring': True,
+                'strict_mode': False,
+                'continue_on_unsupported_nodes': True
+            }
+        
+        col = box.column(align=True)
+        
+        # Core settings
+        col.prop(context.scene, 'materialx_optimize_document', text="Optimize Document")
+        col.prop(context.scene, 'materialx_advanced_validation', text="Advanced Validation")
+        col.prop(context.scene, 'materialx_performance_monitoring', text="Performance Monitoring")
+        
+        # Error handling
+        col.separator()
+        col.prop(context.scene, 'materialx_strict_mode', text="Strict Mode")
+        col.prop(context.scene, 'materialx_continue_on_unsupported_nodes', text="Continue on Unsupported Nodes")
+        
+        # Status information
+        if hasattr(context.scene, 'materialx_last_export_result'):
+            result = context.scene.materialx_last_export_result
+            if result:
+                box = layout.box()
+                box.label(text="Last Export Status", icon='INFO')
+                
+                if result.get('success'):
+                    col = box.column(align=True)
+                    col.label(text="✓ Export Successful", icon='CHECKMARK')
+                    
+                    if 'performance_stats' in result:
+                        stats = result['performance_stats']
+                        if 'total_time' in stats:
+                            col.label(text=f"Time: {stats['total_time']:.2f}s")
+                    
+                    if 'validation_results' in result:
+                        validation = result['validation_results']
+                        if validation.get('warnings'):
+                            col.label(text=f"Warnings: {len(validation['warnings'])}", icon='ERROR')
+                else:
+                    col = box.column(align=True)
+                    col.label(text="✗ Export Failed", icon='ERROR')
+                    
+                    if 'error' in result:
+                        col.label(text=f"Error: {result['error']}")
+                    
+                    if 'unsupported_nodes' in result and result['unsupported_nodes']:
+                        unsupported = result['unsupported_nodes']
+                        col.label(text=f"Unsupported: {len(unsupported)} nodes")
+
+
+# Add properties to scene for configuration
+def register_properties():
+    bpy.types.Scene.materialx_optimize_document = BoolProperty(
+        name="Optimize Document",
+        description="Optimize MaterialX document by removing unused nodes",
+        default=True
+    )
+    
+    bpy.types.Scene.materialx_advanced_validation = BoolProperty(
+        name="Advanced Validation",
+        description="Enable comprehensive MaterialX document validation",
+        default=True
+    )
+    
+    bpy.types.Scene.materialx_performance_monitoring = BoolProperty(
+        name="Performance Monitoring",
+        description="Track performance metrics during export",
+        default=True
+    )
+    
+    bpy.types.Scene.materialx_strict_mode = BoolProperty(
+        name="Strict Mode",
+        description="Fail export on any error (not just unsupported nodes)",
+        default=False
+    )
+    
+    bpy.types.Scene.materialx_continue_on_unsupported_nodes = BoolProperty(
+        name="Continue on Unsupported Nodes",
+        description="Continue export even when encountering unsupported nodes",
+        default=True
+    )
+    
+    bpy.types.Scene.materialx_last_export_result = bpy.props.StringProperty(
+        name="Last Export Result",
+        description="Result of the last MaterialX export operation",
+        default=""
+    )
+
+
+def unregister_properties():
+    del bpy.types.Scene.materialx_optimize_document
+    del bpy.types.Scene.materialx_advanced_validation
+    del bpy.types.Scene.materialx_performance_monitoring
+    del bpy.types.Scene.materialx_strict_mode
+    del bpy.types.Scene.materialx_continue_on_unsupported_nodes
+    del bpy.types.Scene.materialx_last_export_result
 
 classes = (
     MATERIALX_OT_export,
@@ -282,12 +425,18 @@ def register():
     # Print startup message
     print_startup_message()
 
+    # Register properties
+    register_properties()
+
 def unregister():
     for cls in reversed(classes):
         bpy.utils.unregister_class(cls)
     
     # Print unload message
     logger.info(f"🎨 {bl_info['name']} v{bl_info['version']} unloaded")
+
+    # Unregister properties
+    unregister_properties()
 
 if __name__ == "__main__":
     register()

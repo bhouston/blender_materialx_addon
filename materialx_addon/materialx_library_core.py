@@ -49,9 +49,104 @@ except ImportError:
 
 
 
+class MaterialXConfig:
+    """Configuration system for MaterialX export settings."""
+    
+    # Default configuration
+    DEFAULT_CONFIG = {
+        # Core settings
+        'materialx_version': '1.38',
+        'optimize_document': True,
+        'advanced_validation': True,
+        'performance_monitoring': True,
+        
+        # File writing options
+        'skip_library_elements': True,
+        'write_xinclude': False,
+        'remove_layout': True,
+        'format_output': True,
+        
+        # Error handling
+        'strict_mode': False,
+        'continue_on_unsupported_nodes': True,
+        'max_errors': 10,
+        
+        # Performance settings
+        'enable_caching': True,
+        'cache_size_limit': 1000,
+        'memory_warning_threshold_mb': 100,
+        
+        # Validation settings
+        'validate_connections': True,
+        'check_circular_dependencies': True,
+        'warn_unused_nodes': True,
+        'max_node_count_warning': 100,
+        'max_nesting_depth_warning': 10
+    }
+    
+    def __init__(self, custom_config: Dict = None):
+        """Initialize configuration with defaults and custom overrides."""
+        self.config = self.DEFAULT_CONFIG.copy()
+        if custom_config:
+            self.config.update(custom_config)
+    
+    def get(self, key: str, default=None):
+        """Get configuration value."""
+        return self.config.get(key, default)
+    
+    def set(self, key: str, value):
+        """Set configuration value."""
+        self.config[key] = value
+    
+    def update(self, new_config: Dict):
+        """Update configuration with new values."""
+        self.config.update(new_config)
+    
+    def get_export_options(self) -> Dict:
+        """Get export-specific options."""
+        return {
+            'optimize_document': self.get('optimize_document'),
+            'advanced_validation': self.get('advanced_validation'),
+            'performance_monitoring': self.get('performance_monitoring')
+        }
+    
+    def get_write_options(self) -> Dict:
+        """Get file writing options."""
+        return {
+            'skip_library_elements': self.get('skip_library_elements'),
+            'write_xinclude': self.get('write_xinclude'),
+            'remove_layout': self.get('remove_layout'),
+            'format_output': self.get('format_output')
+        }
+
+
 class MaterialXValidationError(Exception):
     """Custom exception for MaterialX validation errors."""
     pass
+
+
+class MaterialXError(Exception):
+    """Base class for MaterialX-specific errors with classification."""
+    
+    def __init__(self, message: str, error_type: str = "general", details: Dict = None):
+        super().__init__(message)
+        self.error_type = error_type
+        self.details = details or {}
+    
+    def get_user_friendly_message(self) -> str:
+        """Get a user-friendly error message."""
+        error_messages = {
+            "library_loading": "Failed to load MaterialX libraries. Please check your MaterialX installation.",
+            "node_creation": "Failed to create MaterialX node. The node type may not be supported.",
+            "connection_error": "Failed to connect nodes. There may be a type mismatch.",
+            "validation_error": "MaterialX document validation failed. Check the material setup.",
+            "file_write": "Failed to write MaterialX file. Check file permissions and disk space.",
+            "type_conversion": "Failed to convert data types. Check input values.",
+            "unsupported_node": "This Blender node type is not supported in MaterialX export.",
+            "performance_warning": "Export completed but performance issues were detected.",
+            "memory_error": "Insufficient memory for export operation."
+        }
+        return error_messages.get(self.error_type, str(self))
 
 
 class MaterialXPerformanceMonitor:
@@ -451,7 +546,14 @@ class MaterialXDocumentManager:
                 self.library_files = mx.loadLibraries([library_path], search_path, self.libraries)
             
             self.logger.info(f"Loaded {len(self.library_files)} library files")
-            self.logger.info(f"Library files: {[f.asString() for f in self.library_files]}")
+            # Handle both FilePath objects and strings
+            library_file_names = []
+            for f in self.library_files:
+                if hasattr(f, 'asString'):
+                    library_file_names.append(f.asString())
+                else:
+                    library_file_names.append(str(f))
+            self.logger.info(f"Library files: {library_file_names}")
             
             # Clear caches after library loading
             self._clear_caches()
