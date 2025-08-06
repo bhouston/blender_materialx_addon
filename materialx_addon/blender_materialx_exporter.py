@@ -690,9 +690,72 @@ class NodeMapper:
 
     @staticmethod
     def map_noise_texture(node, builder: MaterialXBuilder, input_nodes: Dict, input_nodes_by_index: Dict = None, blender_node=None, constant_manager=None, exported_nodes=None) -> str:
-        return map_node_with_schema(node, builder, [
-            {'blender': 'Vector', 'mtlx': 'position', 'type': 'vector2'},
-        ], 'noise2d', 'float', constant_manager, exported_nodes)
+        # --- 1. Handle Vector input (position) ---
+        position_input = None
+        if 'Vector' in input_nodes:
+            position_input = input_nodes['Vector']
+        # --- 2. Handle Scale input (freq = 1.0 / scale) ---
+        scale_is_connected, scale_value_or_node, _ = get_input_value_or_connection(node, 'Scale', exported_nodes)
+        if scale_is_connected:
+            # Emit divide node: freq = 1.0 / scale
+            one_const = constant_manager.get_or_create_constant(builder, 1.0, 'float')
+            divide_node = builder.add_node('divide', f"noise_freq_divide_{node.name}", 'float')
+            builder.add_connection(one_const, 'out', divide_node, 'in1')
+            builder.add_connection(scale_value_or_node, 'out', divide_node, 'in2')
+            freq_input = divide_node
+        else:
+            scale_val = scale_value_or_node if scale_value_or_node not in (None, '') else 5.0
+            freq_val = 1.0 / scale_val if scale_val != 0 else 1.0
+            freq_input = constant_manager.get_or_create_constant(builder, freq_val, 'float')
+        # --- 3. Handle Detail input (octaves) ---
+        detail_is_connected, detail_value_or_node, _ = get_input_value_or_connection(node, 'Detail', exported_nodes)
+        if detail_is_connected:
+            octaves_input = detail_value_or_node
+        else:
+            octaves_val = detail_value_or_node if detail_value_or_node not in (None, '') else 2.0
+            octaves_input = constant_manager.get_or_create_constant(builder, octaves_val, 'float')
+        # --- 4. Handle Roughness input (diminish = 1.0 - roughness) ---
+        rough_is_connected, rough_value_or_node, _ = get_input_value_or_connection(node, 'Roughness', exported_nodes)
+        if rough_is_connected:
+            one_const = constant_manager.get_or_create_constant(builder, 1.0, 'float')
+            subtract_node = builder.add_node('subtract', f"noise_diminish_subtract_{node.name}", 'float')
+            builder.add_connection(one_const, 'out', subtract_node, 'in1')
+            builder.add_connection(rough_value_or_node, 'out', subtract_node, 'in2')
+            diminish_input = subtract_node
+        else:
+            rough_val = rough_value_or_node if rough_value_or_node not in (None, '') else 0.5
+            diminish_val = 1.0 - rough_val
+            diminish_input = constant_manager.get_or_create_constant(builder, diminish_val, 'float')
+        # --- 5. Handle Lacunarity input ---
+        lac_is_connected, lac_value_or_node, _ = get_input_value_or_connection(node, 'Lacunarity', exported_nodes)
+        if lac_is_connected:
+            lacunarity_input = lac_value_or_node
+        else:
+            lacunarity_val = lac_value_or_node if lac_value_or_node not in (None, '') else 2.0
+            lacunarity_input = constant_manager.get_or_create_constant(builder, lacunarity_val, 'float')
+        # --- 6. Handle Distortion input (jitter) ---
+        dist_is_connected, dist_value_or_node, _ = get_input_value_or_connection(node, 'Distortion', exported_nodes)
+        if dist_is_connected:
+            jitter_input = dist_value_or_node
+        else:
+            jitter_val = dist_value_or_node if dist_value_or_node not in (None, '') else 0.0
+            jitter_input = constant_manager.get_or_create_constant(builder, jitter_val, 'float')
+        # --- 7. Create unifiednoise3d node and connect all inputs ---
+        node_name = builder.add_node('unifiednoise3d', f"unifiednoise3d_{node.name}", 'float')
+        # Connect position
+        if position_input:
+            builder.add_connection(position_input, 'out', node_name, 'position')
+        # Connect freq
+        builder.add_connection(freq_input, 'out', node_name, 'freq')
+        # Connect octaves
+        builder.add_connection(octaves_input, 'out', node_name, 'octaves')
+        # Connect diminish
+        builder.add_connection(diminish_input, 'out', node_name, 'diminish')
+        # Connect lacunarity
+        builder.add_connection(lacunarity_input, 'out', node_name, 'lacunarity')
+        # Connect jitter
+        builder.add_connection(jitter_input, 'out', node_name, 'jitter')
+        return node_name
     
     @staticmethod
     def map_mapping(node, builder: MaterialXBuilder, input_nodes: Dict, input_nodes_by_index: Dict = None, blender_node=None, constant_manager=None, exported_nodes=None) -> str:
