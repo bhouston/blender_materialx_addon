@@ -13,6 +13,8 @@ A professional-grade Blender addon to export Blender materials to MaterialX (.mt
 - **Performance Monitoring**: Real-time performance tracking and optimization
 - **Configuration Panel**: In-UI configuration for export settings
 
+![Blender UI](BlenderScreenshot.png)
+
 ## 📦 Installation
 
 ### Manual Installation

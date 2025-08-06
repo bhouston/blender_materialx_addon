@@ -811,6 +811,7 @@ class MaterialXExporter:
         self.copy_textures = self.options.get('copy_textures', True)
         self.relative_paths = True  # Always use relative paths for this workflow
         self.strict_mode = options.get('strict_mode', True)  # Default to strict mode
+        self.logger.info(f"Strict mode setting: {self.strict_mode}")
         
         # Phase 3 enhancements
         self.optimize_document = self.options.get('optimize_document', True)
@@ -893,9 +894,20 @@ class MaterialXExporter:
                     self.logger.error("💡 Suggestion: Add a Principled BSDF node to your material and connect it to the Material Output.")
                     self.logger.error("💡 The Principled BSDF is the standard shader for physically-based rendering in Blender.")
                 
-                result["error"] = "No Principled BSDF node found"
-                result["unsupported_nodes"] = self.unsupported_nodes
-                return result
+                # Check if we should continue despite unsupported nodes
+                print(f"DEBUG: Checking strict mode: {self.strict_mode}")
+                self.logger.info(f"Checking strict mode: {self.strict_mode}")
+                if self.strict_mode:
+                    print("DEBUG: Strict mode enabled - failing export")
+                    self.logger.info("Strict mode enabled - failing export")
+                    result["error"] = "No Principled BSDF node found"
+                    result["unsupported_nodes"] = self.unsupported_nodes
+                    return result
+                else:
+                    # Continue with a basic material export
+                    print("DEBUG: Strict mode disabled - continuing export")
+                    self.logger.warning("⚠ Continuing export despite unsupported nodes...")
+                    return self._export_basic_material()
             
             self.logger.info(f"Found Principled BSDF node: {principled_node.name}")
             self.builder = MaterialXBuilder(self.material.name, self.logger, self.materialx_version)
@@ -978,9 +990,13 @@ class MaterialXExporter:
         
         return result
     
-    def _export_basic_material(self) -> bool:
+    def _export_basic_material(self) -> dict:
         """Export a basic material without nodes."""
+        self.logger.info("Creating basic MaterialX document for unsupported material...")
+        self.logger.info(f"Strict mode in _export_basic_material: {self.strict_mode}")
+        
         self.builder = MaterialXBuilder(self.material.name, self.logger, self.materialx_version)
+        self.builder.exporter = self
         
         # Create a basic standard_surface shader outside the nodegraph
         surface_node = self.builder.add_surface_shader_node("standard_surface", "surface_basic")
@@ -998,7 +1014,16 @@ class MaterialXExporter:
         
         self.builder.set_material_surface(surface_node)
         self._write_file()
-        return True
+        
+        # Return success result with unsupported nodes info
+        result = {
+            "success": True,
+            "unsupported_nodes": self.unsupported_nodes,
+            "output_path": str(self.output_path),
+            "warning": "Material exported with basic surface due to unsupported nodes"
+        }
+        
+        return result
     
     def _find_principled_bsdf_node(self) -> Optional[bpy.types.Node]:
         """Find the Principled BSDF node in the material."""
@@ -1236,6 +1261,9 @@ def export_material_to_materialx(material: bpy.types.Material,
     logger.info(f"Material: {material.name if material else 'None'}")
     logger.info(f"Output path: {output_path}")
     logger.info(f"Options: {options}")
+    logger.info(f"Options type: {type(options)}")
+    if options:
+        logger.info(f"strict_mode in options: {options.get('strict_mode', 'NOT_FOUND')}")
     try:
         exporter = MaterialXExporter(material, output_path, logger, options)
         logger.info("MaterialXExporter instance created successfully")

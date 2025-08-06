@@ -68,8 +68,7 @@ class MaterialXConfig:
         'format_output': True,
         
         # Error handling
-        'strict_mode': False,
-        'continue_on_unsupported_nodes': True,
+        'strict_mode': True,
         'max_errors': 10,
         
         # Performance settings

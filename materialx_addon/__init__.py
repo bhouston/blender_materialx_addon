@@ -107,9 +107,10 @@ class MATERIALX_OT_export(Operator):
                 'export_textures': self.export_textures,
                 'copy_textures': self.copy_textures,
                 'relative_paths': self.relative_paths,
-                'optimize_document': True,
-                'advanced_validation': True,
-                'performance_monitoring': True
+                'optimize_document': context.scene.materialx_optimize_document,
+                'advanced_validation': context.scene.materialx_advanced_validation,
+                'performance_monitoring': True,  # Always enabled
+                'strict_mode': context.scene.materialx_strict_mode
             }
             
             result = blender_materialx_exporter.export_material_to_materialx(
@@ -253,6 +254,10 @@ class MATERIALX_OT_export_all(Operator):
             'copy_textures': self.copy_textures,
             'relative_paths': self.relative_paths,
             'materialx_version': MATERIALX_VERSION,
+            'optimize_document': context.scene.materialx_optimize_document,
+            'advanced_validation': context.scene.materialx_advanced_validation,
+            'performance_monitoring': True,  # Always enabled
+            'strict_mode': context.scene.materialx_strict_mode
         }
 
         logger.info(f"Export options: {options}")
@@ -336,13 +341,11 @@ class MATERIALX_PT_panel(Panel):
         
         # Core settings
         col.prop(context.scene, 'materialx_optimize_document', text="Optimize Document")
-        col.prop(context.scene, 'materialx_advanced_validation', text="Advanced Validation")
-        col.prop(context.scene, 'materialx_performance_monitoring', text="Performance Monitoring")
+        col.prop(context.scene, 'materialx_advanced_validation', text="Validation")
         
         # Error handling
         col.separator()
-        col.prop(context.scene, 'materialx_strict_mode', text="Strict Mode")
-        col.prop(context.scene, 'materialx_continue_on_unsupported_nodes', text="Continue on Unsupported Nodes")
+        col.prop(context.scene, 'materialx_strict_mode', text="Strict Mode (Fail on Unsupported Features)")
         
         # Status information
         if hasattr(context.scene, 'materialx_last_export_result'):
@@ -398,32 +401,20 @@ class MATERIALX_PT_panel(Panel):
 # Add properties to scene for configuration
 def register_properties():
     bpy.types.Scene.materialx_optimize_document = BoolProperty(
-        name="Optimize Document",
+        name="Optimize",
         description="Optimize MaterialX document by removing unused nodes",
         default=True
     )
     
     bpy.types.Scene.materialx_advanced_validation = BoolProperty(
-        name="Advanced Validation",
+        name="Validation",
         description="Enable comprehensive MaterialX document validation",
         default=True
     )
     
-    bpy.types.Scene.materialx_performance_monitoring = BoolProperty(
-        name="Performance Monitoring",
-        description="Track performance metrics during export",
-        default=True
-    )
-    
     bpy.types.Scene.materialx_strict_mode = BoolProperty(
-        name="Strict Mode",
-        description="Fail export on any error (not just unsupported nodes)",
-        default=False
-    )
-    
-    bpy.types.Scene.materialx_continue_on_unsupported_nodes = BoolProperty(
-        name="Continue on Unsupported Nodes",
-        description="Continue export even when encountering unsupported nodes",
+        name="Strict Mode (Fail on Unsupported Features)",
+        description="Fail export on any unsupported features or errors",
         default=True
     )
     
@@ -438,9 +429,7 @@ def register_properties():
 def unregister_properties():
     del bpy.types.Scene.materialx_optimize_document
     del bpy.types.Scene.materialx_advanced_validation
-    del bpy.types.Scene.materialx_performance_monitoring
     del bpy.types.Scene.materialx_strict_mode
-    del bpy.types.Scene.materialx_continue_on_unsupported_nodes
     del bpy.types.Scene.materialx_last_export_result
 
 classes = (
