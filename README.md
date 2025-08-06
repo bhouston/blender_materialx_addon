@@ -181,7 +181,7 @@ result = {
 
 ### Error Classification
 
-The addon provides specific error types with user-friendly messages:
+The addon provides specific error types with user-friendly messages and actionable suggestions:
 
 - **Library Loading**: MaterialX library installation issues
 - **Node Creation**: Unsupported node types or creation failures
@@ -191,6 +191,20 @@ The addon provides specific error types with user-friendly messages:
 - **Type Conversion**: Data type conversion failures
 - **Performance Warning**: Performance optimization suggestions
 - **Memory Error**: Resource management issues
+
+### Helpful Error Messages
+
+The addon provides specific guidance for common issues:
+
+**❌ Unsupported Node Types:**
+- **Emission Shader**: "Replace with Principled BSDF and use 'Emission Color' and 'Emission Strength' inputs"
+- **Fresnel Node**: "Remove this node and use Principled BSDF's built-in fresnel effects via 'Specular IOR Level' and 'IOR' inputs"
+- **Other BSDF Shaders**: "Replace individual BSDF shaders with a single Principled BSDF node"
+
+**❌ No Principled BSDF Found:**
+- **Emission Materials**: "Replace the Emission shader with a Principled BSDF node"
+- **Multiple BSDF Shaders**: "Replace individual BSDF shaders with a single Principled BSDF node"
+- **General**: "Add a Principled BSDF node to your material and connect it to the Material Output"
 
 ## 🔧 Advanced Features
 

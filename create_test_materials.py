@@ -153,7 +153,7 @@ def create_complex_procedural_material():
     return material
 
 def create_glass_material():
-    """Create a glass material with transparency."""
+    """Create a glass material with transparency using Principled BSDF built-in fresnel."""
     material = bpy.data.materials.new(name="GlassMaterial")
     material.use_nodes = True
     nodes = material.node_tree.nodes
@@ -163,10 +163,6 @@ def create_glass_material():
     nodes.clear()
     
     # Create nodes
-    fresnel = nodes.new(type='ShaderNodeFresnel')
-    fresnel.location = (-200, 100)
-    fresnel.inputs['IOR'].default_value = 1.45
-    
     principled = nodes.new(type='ShaderNodeBsdfPrincipled')
     principled.location = (0, 0)
     principled.inputs['Base Color'].default_value = (0.8, 0.9, 1.0, 1.0)
@@ -174,12 +170,12 @@ def create_glass_material():
     principled.inputs['Metallic'].default_value = 0.0
     principled.inputs['IOR'].default_value = 1.45
     principled.inputs['Alpha'].default_value = 0.3
+    principled.inputs['Transmission Weight'].default_value = 0.95
     
     output = nodes.new(type='ShaderNodeOutputMaterial')
     output.location = (300, 0)
     
     # Connect
-    links.new(fresnel.outputs['Fac'], principled.inputs['Metallic'])
     links.new(principled.outputs['BSDF'], output.inputs['Surface'])
     
     # Enable transparency
@@ -240,7 +236,7 @@ def create_metallic_material():
     return material
 
 def create_emission_material():
-    """Create an emission material."""
+    """Create an emission material using Principled BSDF with emission input."""
     material = bpy.data.materials.new(name="EmissionMaterial")
     material.use_nodes = True
     nodes = material.node_tree.nodes
@@ -250,16 +246,19 @@ def create_emission_material():
     nodes.clear()
     
     # Create nodes
-    emission = nodes.new(type='ShaderNodeEmission')
-    emission.location = (0, 0)
-    emission.inputs['Color'].default_value = (1.0, 0.5, 0.2, 1.0)
-    emission.inputs['Strength'].default_value = 5.0
+    principled = nodes.new(type='ShaderNodeBsdfPrincipled')
+    principled.location = (0, 0)
+    principled.inputs['Base Color'].default_value = (1.0, 0.5, 0.2, 1.0)
+    principled.inputs['Emission Color'].default_value = (1.0, 0.5, 0.2, 1.0)
+    principled.inputs['Emission Strength'].default_value = 5.0
+    principled.inputs['Roughness'].default_value = 1.0
+    principled.inputs['Metallic'].default_value = 0.0
     
     output = nodes.new(type='ShaderNodeOutputMaterial')
     output.location = (300, 0)
     
     # Connect
-    links.new(emission.outputs['Emission'], output.inputs['Surface'])
+    links.new(principled.outputs['BSDF'], output.inputs['Surface'])
     
     return material
 
@@ -384,6 +383,13 @@ def create_test_scene_and_save(material_func, filename):
     # Save the file
     output_path = f"examples/blender/{filename}.blend"
     os.makedirs(os.path.dirname(output_path), exist_ok=True)
+    
+    # Remove any existing backup files
+    backup_path = f"{output_path}1"
+    if os.path.exists(backup_path):
+        os.remove(backup_path)
+    
+    # Save the file (this will overwrite if it exists)
     bpy.ops.wm.save_as_mainfile(filepath=output_path)
     
     print(f"Created: {output_path}")

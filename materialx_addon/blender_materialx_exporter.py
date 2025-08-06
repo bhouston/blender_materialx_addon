@@ -803,7 +803,7 @@ class MaterialXExporter:
         self.materialx_version = self.options.get('materialx_version', '1.38')
         self.copy_textures = self.options.get('copy_textures', True)
         self.relative_paths = True  # Always use relative paths for this workflow
-        self.strict_mode = True  # Always strict mode
+        self.strict_mode = options.get('strict_mode', True)  # Default to strict mode
         
         # Phase 3 enhancements
         self.optimize_document = self.options.get('optimize_document', True)
@@ -858,10 +858,24 @@ class MaterialXExporter:
             # Find the Principled BSDF node
             principled_node = self._find_principled_bsdf_node()
             if not principled_node:
-                self.logger.info(f"No Principled BSDF node found in material '{self.material.name}'")
-                self.logger.info("Available node types:")
+                self.logger.error(f"✗ No Principled BSDF node found in material '{self.material.name}'")
+                self.logger.error("💡 This addon only supports materials that use Principled BSDF nodes.")
+                self.logger.error("💡 Available node types in your material:")
                 for node in self.material.node_tree.nodes:
-                    self.logger.info(f"  - {node.name}: {node.type}")
+                    self.logger.error(f"    - {node.name}: {node.type}")
+                
+                # Provide specific guidance based on what nodes are present
+                node_types = [node.type for node in self.material.node_tree.nodes]
+                if 'EMISSION' in node_types:
+                    self.logger.error("💡 Suggestion: Replace the Emission shader with a Principled BSDF node.")
+                    self.logger.error("💡 Use 'Emission Color' and 'Emission Strength' inputs on the Principled BSDF instead.")
+                elif 'BSDF_DIFFUSE' in node_types or 'BSDF_GLOSSY' in node_types or 'BSDF_GLASS' in node_types:
+                    self.logger.error("💡 Suggestion: Replace individual BSDF shaders with a single Principled BSDF node.")
+                    self.logger.error("💡 Principled BSDF combines all these effects in one node with better control.")
+                else:
+                    self.logger.error("💡 Suggestion: Add a Principled BSDF node to your material and connect it to the Material Output.")
+                    self.logger.error("💡 The Principled BSDF is the standard shader for physically-based rendering in Blender.")
+                
                 result["error"] = "No Principled BSDF node found"
                 return result
             
@@ -994,7 +1008,7 @@ class MaterialXExporter:
                     self._export_node(node)
                     self.logger.info(f"  ✓ Successfully exported {node.name}")
                 except Exception as e:
-                    self.logger.error(f"  ✗ Failed to export {node.name}: {str(e)}")
+                    # Don't log the error again since _export_node already logged helpful messages
                     raise
             else:
                 self.logger.info(f"Skipping already exported node: {node.name}")
@@ -1033,8 +1047,22 @@ class MaterialXExporter:
         if not mapper:
             self.logger.warning(f"  Warning: No mapper found for node type '{node.type}' ({node.name})")
             self.logger.warning(f"  Available mappers: {list(NodeMapper.get_node_mapper.__defaults__ or [])}")
+            
+            # Provide specific guidance for common unsupported node types
+            if node.type == 'EMISSION':
+                self.logger.error(f"  ✗ Emission shader '{node.name}' is not supported.")
+                self.logger.error(f"  💡 Suggestion: Replace with Principled BSDF and use 'Emission Color' and 'Emission Strength' inputs instead.")
+                self.logger.error(f"  💡 This addon only supports materials that use Principled BSDF nodes.")
+            elif node.type == 'FRESNEL':
+                self.logger.error(f"  ✗ Fresnel node '{node.name}' is not supported.")
+                self.logger.error(f"  💡 Suggestion: Remove this node and use Principled BSDF's built-in fresnel effects via 'Specular IOR Level' and 'IOR' inputs.")
+                self.logger.error(f"  💡 Principled BSDF has built-in fresnel calculations that are more accurate and efficient.")
+            else:
+                self.logger.error(f"  ✗ Node type '{node.type}' ({node.name}) is not supported.")
+                self.logger.error(f"  💡 Suggestion: Use only supported node types or replace with equivalent Principled BSDF functionality.")
+            
             if self.strict_mode:
-                raise RuntimeError(f"Unsupported node type encountered in strict mode: {node.type} ({node.name})")
+                raise RuntimeError(f"Unsupported node type encountered: {node.type} ({node.name})")
             return self._export_unknown_node(node)
         self.logger.info(f"  Found mapper for {node.type}")
         # Build input nodes dictionary - handle duplicate input names
