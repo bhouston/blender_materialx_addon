@@ -1,5 +1,7 @@
 # MaterialX Utilities Collection
 
+Source: https://github.com/kwokcb/MaterialX_Learn/tree/main/pymaterialx/mtlxutils
+
 This package `mtlxutils` contains a collection of the utilities explained and used for Python tutorials that can be found [here](https://kwokcb.github.io/MaterialX_Learn/documents/jupyter_example.html)
 
 The minimum MaterialX package version is `1.38.8`.
