@@ -10,7 +10,7 @@ bl_info = {
     "category": "Material",
 }
 
-MATERIALX_VERSION = '1.38'
+MATERIALX_VERSION = '1.39'
 
 import bpy
 from bpy.props import BoolProperty, StringProperty
@@ -43,7 +43,7 @@ def print_startup_message():
     logger.info("   • Export individual materials to MaterialX format")
     logger.info("   • Export all materials at once")
     logger.info("   • Support for texture export and copying")
-    logger.info("   • MaterialX 1.38 specification compliance")
+    logger.info("   • MaterialX 1.39 specification compliance")
     logger.info("   • Fixed mix node parameters (fg, bg, mix)")
     logger.info("   • Added layer, add, multiply nodes")
     logger.info("   • Added roughness_anisotropy and artistic_ior utilities")

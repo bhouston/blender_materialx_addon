@@ -54,23 +54,14 @@ def test_export():
     try:
         import sys
         sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-        from materialx_addon.blender_materialx_exporter import MaterialXExporter
+        from materialx_addon.blender_materialx_exporter import export_material_to_materialx
         print("✓ MaterialX exporter imported successfully")
     except ImportError as e:
         print(f"✗ Failed to import exporter: {e}")
         return False
     
-    # Create exporter instance
-    print("\n3. Creating exporter instance...")
-    try:
-        exporter = MaterialXExporter()
-        print("✓ Exporter instance created")
-    except Exception as e:
-        print(f"✗ Failed to create exporter: {e}")
-        return False
-    
     # Create temporary output file
-    print("\n4. Creating output file...")
+    print("\n3. Creating output file...")
     try:
         with tempfile.NamedTemporaryFile(suffix='.mtlx', delete=False) as tmp_file:
             output_path = tmp_file.name
@@ -80,16 +71,16 @@ def test_export():
         return False
     
     # Export the material
-    print("\n5. Exporting material...")
+    print("\n4. Exporting material...")
     try:
-        result = exporter.export_material_to_materialx(material, output_path, options={})
+        result = export_material_to_materialx(material, output_path, logger, options={})
         print(f"✓ Export result: {result}")
     except Exception as e:
         print(f"✗ Export failed: {e}")
         return False
     
     # Check the output file
-    print("\n6. Checking output file...")
+    print("\n5. Checking output file...")
     try:
         if os.path.exists(output_path):
             with open(output_path, 'r') as f:
@@ -125,7 +116,7 @@ def test_export():
         return False
     
     # Clean up
-    print("\n7. Cleaning up...")
+    print("\n6. Cleaning up...")
     try:
         os.unlink(output_path)
         print("✓ Temporary file cleaned up")

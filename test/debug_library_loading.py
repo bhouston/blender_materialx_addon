@@ -24,66 +24,119 @@ def debug_library_loading():
         
         # Get search paths
         search_path = mx.getDefaultDataSearchPath()
+        print(f"Default search path type: {type(search_path)}")
+        print(f"Default search path: {search_path}")
+        
+        # Try to convert search path to list
         search_paths = []
         try:
-            for i in range(search_path.size()):
-                search_paths.append(search_path[i])
-        except:
+            # Try different ways to access the search path
+            if hasattr(search_path, 'size'):
+                print(f"Search path has size() method, size: {search_path.size()}")
+                for i in range(search_path.size()):
+                    search_paths.append(str(search_path[i]))
+            elif hasattr(search_path, '__iter__'):
+                print("Search path is iterable")
+                for path in search_path:
+                    search_paths.append(str(path))
+            else:
+                print("Search path is not iterable, converting to string")
+                search_paths = [str(search_path)]
+        except Exception as e:
+            print(f"Error converting search path: {e}")
             search_paths = [str(search_path)]
         
-        print(f"Search paths: {search_paths}")
+        print(f"Converted search paths: {search_paths}")
         
-        # Find library files
+        # Try to find library files manually
         library_files = []
         for path in search_paths:
+            print(f"Checking path: {path}")
             if os.path.exists(path):
+                print(f"  Path exists: {path}")
                 for root, dirs, files in os.walk(path):
                     for file in files:
                         if file.endswith('.mtlx'):
-                            library_files.append(os.path.join(root, file))
+                            full_path = os.path.join(root, file)
+                            library_files.append(full_path)
+                            print(f"  Found library: {file}")
+            else:
+                print(f"  Path does not exist: {path}")
         
-        print(f"Found {len(library_files)} library files")
+        print(f"Found {len(library_files)} library files manually")
         
-        # Show first few library files
-        print("First 10 library files:")
-        for i, lib_file in enumerate(library_files[:10]):
-            print(f"  {i+1}. {os.path.basename(lib_file)}")
+        # Try to load libraries using MaterialX API
+        print(f"\nTrying to load libraries using MaterialX API...")
         
-        # Load libraries step by step
-        loaded_libraries = []
+        # Method 1: Try loadLibraries
+        try:
+            print("Method 1: Using loadLibraries...")
+            lib_folders = mx.getDefaultDataLibraryFolders()
+            print(f"Library folders: {lib_folders}")
+            loaded_files = mx.loadLibraries(lib_folders, search_path, doc)
+            print(f"Loaded {len(loaded_files)} files using loadLibraries")
+        except Exception as e:
+            print(f"Method 1 failed: {e}")
         
-        # Step 1: Load standard library
-        stdlib_files = [lib for lib in library_files if 'stdlib' in lib and 'defs' in lib]
-        if stdlib_files:
-            print(f"\nStep 1: Loading standard library...")
-            try:
-                stdlib_file = stdlib_files[0]
-                print(f"  Loading: {os.path.basename(stdlib_file)}")
-                mx.readFromXmlFile(doc, stdlib_file)
-                loaded_libraries.append(os.path.basename(stdlib_file))
-                print(f"  ✓ Standard library loaded")
-            except Exception as e:
-                print(f"  ✗ Failed to load standard library: {e}")
-        else:
-            print(f"\nStep 1: No standard library found")
+        # Method 2: Try reading individual files
+        try:
+            print("Method 2: Reading individual files...")
+            loaded_count = 0
+            for lib_file in library_files[:5]:  # Try first 5 files
+                try:
+                    print(f"  Reading: {os.path.basename(lib_file)}")
+                    mx.readFromXmlFile(doc, lib_file)
+                    loaded_count += 1
+                except Exception as e:
+                    print(f"  Failed to read {os.path.basename(lib_file)}: {e}")
+            print(f"Loaded {loaded_count} files using readFromXmlFile")
+        except Exception as e:
+            print(f"Method 2 failed: {e}")
         
-        # Step 2: Load standard_surface library
-        standard_surface_files = [lib for lib in library_files if 'standard_surface' in lib]
-        if standard_surface_files:
-            print(f"\nStep 2: Loading standard_surface library...")
-            try:
-                ss_file = standard_surface_files[0]
-                print(f"  Loading: {os.path.basename(ss_file)}")
-                mx.readFromXmlFile(doc, ss_file)
-                loaded_libraries.append(os.path.basename(ss_file))
-                print(f"  ✓ Standard surface library loaded")
-            except Exception as e:
-                print(f"  ✗ Failed to load standard_surface library: {e}")
-        else:
-            print(f"\nStep 2: No standard_surface library found")
+        # Test importLibrary method
+        print(f"\nTesting importLibrary method...")
+        try:
+            # Create a separate libraries document
+            libraries_doc = mx.createDocument()
+            lib_folders = mx.getDefaultDataLibraryFolders()
+            loaded_files = mx.loadLibraries(lib_folders, search_path, libraries_doc)
+            print(f"Loaded {len(loaded_files)} files into libraries document")
+            
+            # Check node definitions in libraries document
+            lib_node_defs = libraries_doc.getNodeDefs()
+            print(f"Libraries document has {len(lib_node_defs)} node definitions")
+            
+            # Create working document
+            working_doc = mx.createDocument()
+            print(f"Working document has {len(working_doc.getNodeDefs())} node definitions before import")
+            
+            # Import libraries into working document
+            working_doc.importLibrary(libraries_doc)
+            print(f"Working document has {len(working_doc.getNodeDefs())} node definitions after import")
+            
+            # Check for specific node definitions
+            standard_surface_found = False
+            surfacematerial_found = False
+            
+            for node_def in working_doc.getNodeDefs():
+                name = node_def.getName()
+                if 'standard_surface' in name:
+                    print(f"  ✓ Found standard_surface: {name}")
+                    standard_surface_found = True
+                elif 'surfacematerial' in name:
+                    print(f"  ✓ Found surfacematerial: {name}")
+                    surfacematerial_found = True
+            
+            if not standard_surface_found:
+                print(f"  ⚠ No standard_surface node definition found")
+            if not surfacematerial_found:
+                print(f"  ⚠ No surfacematerial node definition found")
+                
+        except Exception as e:
+            print(f"importLibrary test failed: {e}")
         
-        # Step 3: Check node definitions after loading
-        print(f"\nStep 3: Checking node definitions...")
+        # Check node definitions after loading
+        print(f"\nChecking node definitions after loading...")
         try:
             node_defs = doc.getNodeDefs()
             print(f"  Found {len(node_defs)} node definitions")
@@ -109,8 +162,8 @@ def debug_library_loading():
         except Exception as e:
             print(f"  ✗ Failed to check node definitions: {e}")
         
-        # Step 4: Test node creation
-        print(f"\nStep 4: Testing node creation...")
+        # Test node creation
+        print(f"\nTesting node creation...")
         try:
             # Try to create a standard_surface node
             node = doc.addNode("standard_surface", "test_surface")
@@ -131,8 +184,8 @@ def debug_library_loading():
         except Exception as e:
             print(f"  ✗ Error creating surfacematerial node: {e}")
         
-        # Step 5: Generate XML to verify
-        print(f"\nStep 5: Generating XML output...")
+        # Generate XML to verify
+        print(f"\nGenerating XML output...")
         try:
             xml_string = mx.writeToXmlString(doc)
             print(f"  Generated XML ({len(xml_string)} characters)")
@@ -154,7 +207,7 @@ def debug_library_loading():
             print(f"  ✗ Failed to generate XML: {e}")
         
         print(f"\nSummary:")
-        print(f"  - Loaded {len(loaded_libraries)} libraries: {loaded_libraries}")
+        print(f"  - Found {len(library_files)} library files manually")
         print(f"  - Found {len(node_defs) if 'node_defs' in locals() else 0} node definitions")
         print(f"  - standard_surface: {'✓' if standard_surface_found else '✗'}")
         print(f"  - surfacematerial: {'✓' if surfacematerial_found else '✗'}")

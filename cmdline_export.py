@@ -227,8 +227,8 @@ def main():
                        help="Export texture files (default: False)")
     parser.add_argument("--texture-path", default="./textures",
                        help="Directory to export textures to (default: ./textures)")
-    parser.add_argument("--version", default="1.38",
-                       help="MaterialX version (default: 1.38)")
+    parser.add_argument("--version", default="1.39",
+                    help="MaterialX version (default: 1.39)")
     parser.add_argument("--relative-paths", action="store_true", default=True,
                        help="Use relative paths for textures (default: True)")
     parser.add_argument("--copy-textures", action="store_true", default=True,

@@ -21,6 +21,7 @@ Phase 3: Advanced Features Integration
 - Performance optimization and memory management
 - Error recovery and robustness features
 """
+print("DEBUG: MaterialX library core module loaded")
 
 import MaterialX as mx
 import os
@@ -55,7 +56,7 @@ class MaterialXConfig:
     # Default configuration
     DEFAULT_CONFIG = {
         # Core settings
-        'materialx_version': '1.38',
+        'materialx_version': '1.39',
         'optimize_document': True,
         'advanced_validation': True,
         'performance_monitoring': True,
@@ -300,8 +301,9 @@ class MaterialXAdvancedValidator:
             if not materials:
                 results['warnings'].append("No material nodes found in document")
             
-            # Check for surface shaders
-            surface_shaders = document.getNodesOfType(mx.SURFACE_SHADER_TYPE_STRING)
+            # Check for surface shaders - get all nodes and filter by type
+            all_nodes = document.getNodes()
+            surface_shaders = [node for node in all_nodes if node.getType() == 'surfaceshader']
             if not surface_shaders:
                 results['warnings'].append("No surface shader nodes found in document")
             
@@ -494,7 +496,7 @@ class MaterialXDocumentManager:
     - Performance monitoring
     """
     
-    def __init__(self, logger, version: str = "1.38"):
+    def __init__(self, logger, version: str = "1.39"):
         self.logger = logger
         self.version = version
         self.document = None
@@ -526,34 +528,17 @@ class MaterialXDocumentManager:
             
             self.logger.info(f"Loading MaterialX libraries (version: {self.version})")
             
-            # Create search path
-            self.search_path = mx.FileSearchPath()
-            if custom_search_path:
-                self.search_path.append(mx.FilePath(custom_search_path))
+            # Create libraries document if not already created
+            if self.libraries is None:
+                self.libraries = mx.createDocument()
             
-            # Check MaterialX version and use appropriate loading method
-            if mxb.haveVersion(1, 38, 7):
-                self.logger.info("Using MaterialX 1.38.7+ library loading method")
-                search_path = mx.getDefaultDataSearchPath()
-                search_path.append(self.search_path)
-                lib_folders = mx.getDefaultDataLibraryFolders()
-                self.library_files = mx.loadLibraries(lib_folders, search_path, self.libraries)
-            else:
-                self.logger.info("Using legacy MaterialX library loading method")
-                library_path = mx.FilePath('libraries')
-                search_path = mx.FileSearchPath()
-                search_path.append(self.search_path)
-                self.library_files = mx.loadLibraries([library_path], search_path, self.libraries)
+            # Use the working method from our debug test
+            self.logger.info("Using MaterialX 1.39+ library loading method")
+            search_path = mx.getDefaultDataSearchPath()
+            lib_folders = mx.getDefaultDataLibraryFolders()
+            self.library_files = mx.loadLibraries(lib_folders, search_path, self.libraries)
             
             self.logger.info(f"Loaded {len(self.library_files)} library files")
-            # Handle both FilePath objects and strings
-            library_file_names = []
-            for f in self.library_files:
-                if hasattr(f, 'asString'):
-                    library_file_names.append(f.asString())
-                else:
-                    library_file_names.append(str(f))
-            self.logger.info(f"Library files: {library_file_names}")
             
             # Clear caches after library loading
             self._clear_caches()
@@ -586,7 +571,9 @@ class MaterialXDocumentManager:
             
             # Create working document
             self.document = mx.createDocument()
+            self.logger.info(f"Working document has {len(self.document.getNodeDefs())} node definitions before import")
             self.document.importLibrary(self.libraries)
+            self.logger.info(f"Working document has {len(self.document.getNodeDefs())} node definitions after import")
             
             # Validate document after creation
             validation_results = self.advanced_validator.validate_document_comprehensive(self.document)
@@ -630,18 +617,43 @@ class MaterialXDocumentManager:
         try:
             self.performance_monitor.start_operation("get_node_definition")
             
-            if category:
-                # Search by category and type
-                nodedefs = self.document.getMatchingNodeDefs(category)
-                for nodedef in nodedefs:
-                    if nodedef.getType() == node_type:
+            # Get all node definitions and search through them
+            all_node_defs = self.document.getNodeDefs()
+            print(f"DEBUG: Searching for node definition '{node_type}' (category: {category}) among {len(all_node_defs)} node definitions")
+            self.logger.info(f"Searching for node definition '{node_type}' (category: {category}) among {len(all_node_defs)} node definitions")
+            
+            # Look for exact match first by node type
+            for nodedef in all_node_defs:
+                if nodedef.getType() == node_type:
+                    if category is None or nodedef.getCategory() == category:
                         result = nodedef
+                        self.logger.info(f"Found exact match by type: {nodedef.getName()}")
                         break
-                else:
-                    result = None
             else:
-                # Search by name
-                result = self.document.getNodeDef(node_type)
+                # If no exact match by type, try searching by node name
+                print(f"DEBUG: No exact match by type, trying search by name...")
+                self.logger.info(f"No exact match by type, trying search by name...")
+                for nodedef in all_node_defs:
+                    nodedef_name = nodedef.getName()
+                    if node_type in nodedef_name:
+                        if category is None or nodedef.getCategory() == category:
+                            result = nodedef
+                            print(f"DEBUG: Found match by name: {nodedef_name} (type: {nodedef.getType()})")
+                            self.logger.info(f"Found match by name: {nodedef_name} (type: {nodedef.getType()})")
+                            break
+                else:
+                    # If no match by name, try partial matching on type
+                    self.logger.info(f"No match by name, trying partial matching on type...")
+                    for nodedef in all_node_defs:
+                        nodedef_type = nodedef.getType()
+                        if node_type in nodedef_type or nodedef_type in node_type:
+                            if category is None or nodedef.getCategory() == category:
+                                result = nodedef
+                                self.logger.info(f"Found partial match by type: {nodedef.getName()} (type: {nodedef_type})")
+                                break
+                    else:
+                        result = None
+                        self.logger.warning(f"No node definition found for '{node_type}' (category: {category})")
             
             # Cache the result
             if result is not None:
@@ -1339,7 +1351,7 @@ class MaterialXLibraryBuilder:
     with proper MaterialX library APIs and Phase 3 enhancements.
     """
     
-    def __init__(self, material_name: str, logger, version: str = "1.38"):
+    def __init__(self, material_name: str, logger, version: str = "1.39"):
         self.material_name = material_name
         self.version = version
         self.logger = logger

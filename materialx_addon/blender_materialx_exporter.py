@@ -33,10 +33,13 @@ import math
 try:
     from . import materialx_library_core
     from .materialx_library_core import MaterialXLibraryBuilder, MaterialXDocumentManager, MaterialXTypeConverter
-except ImportError:
+    print("MaterialX library core imported successfully")
+except ImportError as e:
+    print(f"Failed to import MaterialX library core: {e}")
     # Fallback for direct import
     import materialx_library_core
     from materialx_library_core import MaterialXLibraryBuilder, MaterialXDocumentManager, MaterialXTypeConverter
+    print("MaterialX library core imported via fallback")
 
 
 def get_input_value_or_connection(node, input_name, exported_nodes=None) -> Tuple[bool, Any, str]:
@@ -224,10 +227,12 @@ class MaterialXBuilder:
     using the enhanced MaterialX library core with type-safe operations.
     """
     
-    def __init__(self, material_name: str, logger, version: str = "1.38" ):
+    def __init__(self, material_name: str, logger, version: str = "1.39" ):
         self.material_name = material_name
         self.logger = logger
         self.version = version
+        
+        self.logger.info(f"MaterialXBuilder: Initializing with version {version}")
         
         # Initialize enhanced library builder
         self.library_builder = MaterialXLibraryBuilder(material_name, logger, version)
@@ -235,6 +240,8 @@ class MaterialXBuilder:
         self.nodes = self.library_builder.nodes
         self.connections = self.library_builder.connections
         self.node_counter = self.library_builder.node_counter
+        
+        self.logger.info(f"MaterialXBuilder: Library builder initialized, document has {len(self.document.getNodeDefs())} node definitions")
         
         # Phase 2 enhancements
         self.type_converter = MaterialXTypeConverter(logger)
@@ -800,7 +807,7 @@ class MaterialXExporter:
         self.export_textures = self.options.get('export_textures', True)
         texture_path_opt = self.options.get('texture_path', '.')
         self.texture_path = (self.output_path.parent / texture_path_opt).resolve()
-        self.materialx_version = self.options.get('materialx_version', '1.38')
+        self.materialx_version = self.options.get('materialx_version', '1.39')
         self.copy_textures = self.options.get('copy_textures', True)
         self.relative_paths = True  # Always use relative paths for this workflow
         self.strict_mode = options.get('strict_mode', True)  # Default to strict mode
