@@ -240,22 +240,55 @@ The addon provides specific error types with user-friendly messages:
 
 ## 🧪 Testing
 
-The addon includes comprehensive testing that runs Blender and tests the actual addon functionality:
+The addon includes comprehensive testing with real-world material examples:
+
+### Enhanced Testing with Real-World Materials
 
 ```bash
-# Run comprehensive Blender addon test
-python test_blender_addon.py
+# Run enhanced comprehensive test with real-world materials
+python3 test_blender_addon_enhanced.py
 ```
 
-This test script:
+This enhanced test script uses 8 realistic Blender material examples with varying complexity:
+
+**✅ Successfully Tested Materials (6/8):**
+- **SimplePrincipled**: Basic Principled BSDF material
+- **TextureBased**: Material with noise textures and color ramps  
+- **ComplexProcedural**: Complex procedural material with multiple noise layers
+- **MetallicMaterial**: Metallic material with anisotropy
+- **MixedShader**: Material mixing different shaders
+- **MathHeavy**: Material with extensive math operations
+
+**❌ Materials Needing Support (2/8):**
+- **EmissionMaterial**: Pure emission shader (needs Emission node support)
+- **GlassMaterial**: Glass with transparency (needs Fresnel node support)
+
+### Basic Testing
+
+```bash
+# Run basic Blender addon test
+python3 test_blender_addon.py
+```
+
+The test scripts:
 - ✅ Tests addon installation and loading in Blender
-- ✅ Creates real materials with various node types
+- ✅ Uses real-world materials with complex node graphs
 - ✅ Tests UI functionality (export buttons, configuration)
 - ✅ Validates exported MaterialX files
 - ✅ Tests error conditions and edge cases
 - ✅ Performs performance testing with complex materials
+- ✅ Provides detailed test reports and validation
 
-The test creates temporary Blender files and validates the exported MaterialX output, ensuring the addon works correctly in a real Blender environment.
+### Test Material Creation
+
+```bash
+# Create test materials using Blender MCP
+blender --background --python create_test_materials.py
+```
+
+This creates realistic test materials in `examples/blender/` for comprehensive testing.
+
+See [TEST_RESULTS.md](TEST_RESULTS.md) for detailed analysis of test results and recommendations.
 
 ## 📋 Requirements
 
