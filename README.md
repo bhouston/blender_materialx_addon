@@ -76,12 +76,17 @@ python cmdline_export.py <blend_file> <material_name> <output_mtlx_file> [option
 ### Texture Nodes
 
 - **Checker, Gradient, Noise, Wave** → `checkerboard`, `ramplr`, `noise2d`, `wave`
+- **Brick Texture** → `brick` (with mortar and brick pattern support)
+- **Musgrave Texture** → `musgrave` (fractal noise texture)
 
 ### Utility Nodes
 
 - **Normal Map, Bump** → `normalmap`, `bump`
 - **Mapping, Layer, Add, Multiply** → `place2d`, `layer`, `add`, `multiply`
 - **Color Ramp, HSV/RGB conversion** → `ramplr`, `hsvtorgb`, `rgbtohsv`
+- **Geometry Info** → `position` (position, normal, tangent data)
+- **Object Info** → `constant` (object-specific data)
+- **Light Path** → `constant` (light path information)
 
 ## 📊 Export Results
 

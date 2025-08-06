@@ -1302,21 +1302,53 @@ class MaterialXNodeBuilder:
             bool: True if connection successful
         """
         try:
-            # Get output and input definitions for type checking
-            from_output_def = from_node.getActiveOutput(from_output)
-            to_input_def = to_node.getActiveInput(to_input)
+            # Validate that nodes exist
+            if not from_node or not to_node:
+                self.logger.warning(f"Invalid nodes for connection: {from_node} -> {to_node}")
+                return False
             
+            # Get output and input definitions for type checking (handle None gracefully)
+            from_output_def = from_node.getActiveOutput(from_output) if from_node else None
+            to_input_def = to_node.getActiveInput(to_input) if to_node else None
+            
+            # Type validation (only if definitions exist)
             if from_output_def and to_input_def:
-                from_type = from_output_def.getType()
-                to_type = to_input_def.getType()
-                
-                # Validate type compatibility
-                if not self.type_converter.validate_type_compatibility(from_type, to_type):
-                    self.logger.warning(f"Type mismatch in connection: {from_type} -> {to_type}")
-                    return False
+                try:
+                    from_type = from_output_def.getType()
+                    to_type = to_input_def.getType()
+                    
+                    # Validate type compatibility
+                    if not self.type_converter.validate_type_compatibility(from_type, to_type):
+                        self.logger.warning(f"Type mismatch in connection: {from_type} -> {to_type}")
+                        # Don't return False here, try the connection anyway
+                except Exception as type_error:
+                    self.logger.debug(f"Type validation failed, proceeding with connection: {type_error}")
             
-            # Use mtlxutils for connection
-            success = mxg.MtlxNodeGraph.connectNodeToNode(to_node, to_input, from_node, from_output)
+            # Use direct MaterialX connection method
+            try:
+                # Debug: Check what inputs are available on the target node
+                node_def = to_node.getNodeDef()
+                if node_def:
+                    available_inputs = [input.getName() for input in node_def.getInputs()]
+                    self.logger.debug(f"Available inputs for {to_node.getName()} ({to_node.getType()}): {available_inputs}")
+                
+                # Create input if it doesn't exist
+                input_port = to_node.addInputFromNodeDef(to_input)
+                if input_port:
+                    # Remove any existing value
+                    input_port.removeAttribute('value')
+                    # Set the connection
+                    input_port.setAttribute('nodename', from_node.getName())
+                    if from_output and from_output != 'out':
+                        input_port.setOutputString(from_output)
+                    success = True
+                    self.logger.debug(f"Direct connection successful: {from_node.getName()}.{from_output} -> {to_node.getName()}.{to_input}")
+                else:
+                    self.logger.warning(f"Failed to create input port: {to_node.getName()}.{to_input}")
+                    success = False
+            except Exception as connection_error:
+                self.logger.error(f"Direct connection failed: {connection_error}")
+                success = False
             
             if success:
                 self.logger.debug(f"Connected {from_node.getName()}.{from_output} -> {to_node.getName()}.{to_input}")

@@ -64,6 +64,82 @@ def get_input_value_or_connection(node, input_name, exported_nodes=None) -> Tupl
         return False, value, str(input_socket.type)
 
 
+def get_node_output_name_robust(blender_node_type: str, blender_output_name: str) -> str:
+    """
+    Get the MaterialX output name for a Blender node output using explicit mapping.
+    
+    Args:
+        blender_node_type: The Blender node type (e.g., 'TEX_COORD', 'MIX')
+        blender_output_name: The Blender output name (e.g., 'Generated', 'Result')
+        
+    Returns:
+        str: The MaterialX output name
+        
+    Raises:
+        ValueError: If no explicit mapping is found
+    """
+    if blender_node_type in NODE_MAPPING:
+        node_mapping = NODE_MAPPING[blender_node_type]
+        if 'outputs' in node_mapping:
+            outputs_mapping = node_mapping['outputs']
+            if blender_output_name in outputs_mapping:
+                return outputs_mapping[blender_output_name]
+            else:
+                raise ValueError(f"No explicit mapping found for output '{blender_output_name}' in node type '{blender_node_type}'. Available outputs: {list(outputs_mapping.keys())}")
+        else:
+            raise ValueError(f"No outputs mapping found for node type '{blender_node_type}'")
+    else:
+        raise ValueError(f"No explicit mapping found for node type '{blender_node_type}'. Available node types: {list(NODE_MAPPING.keys())}")
+
+
+def get_node_input_name_robust(blender_node_type: str, blender_input_name: str) -> str:
+    """
+    Get the MaterialX input name for a Blender node input using explicit mapping.
+    
+    Args:
+        blender_node_type: The Blender node type (e.g., 'MIX', 'NOISE_TEXTURE')
+        blender_input_name: The Blender input name (e.g., 'A', 'Vector')
+        
+    Returns:
+        str: The MaterialX input name
+        
+    Raises:
+        ValueError: If no explicit mapping is found
+    """
+    if blender_node_type in NODE_MAPPING:
+        node_mapping = NODE_MAPPING[blender_node_type]
+        if 'inputs' in node_mapping:
+            inputs_mapping = node_mapping['inputs']
+            if blender_input_name in inputs_mapping:
+                return inputs_mapping[blender_input_name]
+            else:
+                raise ValueError(f"No explicit mapping found for input '{blender_input_name}' in node type '{blender_node_type}'. Available inputs: {list(inputs_mapping.keys())}")
+        else:
+            raise ValueError(f"No inputs mapping found for node type '{blender_node_type}'")
+    else:
+        raise ValueError(f"No explicit mapping found for node type '{blender_node_type}'. Available node types: {list(NODE_MAPPING.keys())}")
+
+
+def get_node_mtlx_type(blender_node_type: str) -> Tuple[str, str]:
+    """
+    Get the MaterialX node type and category for a Blender node type.
+    
+    Args:
+        blender_node_type: The Blender node type
+        
+    Returns:
+        Tuple[str, str]: (MaterialX node type, MaterialX category)
+        
+    Raises:
+        ValueError: If no explicit mapping is found
+    """
+    if blender_node_type in NODE_MAPPING:
+        node_mapping = NODE_MAPPING[blender_node_type]
+        return node_mapping['mtlx_type'], node_mapping['mtlx_category']
+    else:
+        raise ValueError(f"No explicit mapping found for node type '{blender_node_type}'. Available node types: {list(NODE_MAPPING.keys())}")
+
+
 # Enhanced node schemas with type information for Phase 2
 NODE_SCHEMAS = {
     'MIX': [
@@ -114,10 +190,6 @@ NODE_SCHEMAS = {
         {'blender': 'Sheen Tint', 'mtlx': 'sheen_tint', 'type': 'float', 'category': 'surfaceshader'},
         {'blender': 'Sheen Roughness', 'mtlx': 'sheen_roughness', 'type': 'float', 'category': 'surfaceshader'},
     ],
-    'MATH': [
-        {'blender': 'A', 'mtlx': 'in1', 'type': 'float', 'category': 'math'},
-        {'blender': 'B', 'mtlx': 'in2', 'type': 'float', 'category': 'math'},
-    ],
     'VECTOR_MATH': [
         {'blender': 'A', 'mtlx': 'in1', 'type': 'vector3', 'category': 'vector3'},
         {'blender': 'B', 'mtlx': 'in2', 'type': 'vector3', 'category': 'vector3'},
@@ -137,6 +209,446 @@ NODE_SCHEMAS = {
         {'blender': 'Distortion', 'mtlx': 'distortion', 'type': 'float', 'category': 'color3'},
         {'blender': 'Detail', 'mtlx': 'detail', 'type': 'float', 'category': 'color3'},
     ],
+    'VORONOI_TEXTURE': [
+        {'blender': 'Vector', 'mtlx': 'texcoord', 'type': 'vector3', 'category': 'color3'},
+        {'blender': 'Scale', 'mtlx': 'scale', 'type': 'float', 'category': 'color3'},
+        {'blender': 'Detail', 'mtlx': 'detail', 'type': 'float', 'category': 'color3'},
+    ],
+    'CURVE_RGB': [
+        {'blender': 'Color', 'mtlx': 'in', 'type': 'color3', 'category': 'color3'},
+    ],
+    'CLAMP': [
+        {'blender': 'Value', 'mtlx': 'in', 'type': 'color3', 'category': 'color3'},
+        {'blender': 'Min', 'mtlx': 'low', 'type': 'color3', 'category': 'color3'},
+        {'blender': 'Max', 'mtlx': 'high', 'type': 'color3', 'category': 'color3'},
+    ],
+    'MAP_RANGE': [
+        {'blender': 'Value', 'mtlx': 'in', 'type': 'color3', 'category': 'color3'},
+        {'blender': 'From Min', 'mtlx': 'inlow', 'type': 'color3', 'category': 'color3'},
+        {'blender': 'From Max', 'mtlx': 'inhigh', 'type': 'color3', 'category': 'color3'},
+        {'blender': 'To Min', 'mtlx': 'outlow', 'type': 'color3', 'category': 'color3'},
+        {'blender': 'To Max', 'mtlx': 'outhigh', 'type': 'color3', 'category': 'color3'},
+    ],
+
+    'TEX_MUSGRAVE': [
+        {'blender': 'Vector', 'mtlx': 'texcoord', 'type': 'vector3', 'category': 'color3'},
+        {'blender': 'Scale', 'mtlx': 'scale', 'type': 'float', 'category': 'color3'},
+        {'blender': 'Detail', 'mtlx': 'detail', 'type': 'float', 'category': 'color3'},
+        {'blender': 'Dimension', 'mtlx': 'dimension', 'type': 'float', 'category': 'color3'},
+        {'blender': 'Lacunarity', 'mtlx': 'lacunarity', 'type': 'float', 'category': 'color3'},
+    ],
+    # New utility nodes
+    'NEW_GEOMETRY': [
+        {'blender': 'Position', 'mtlx': 'out', 'type': 'vector3', 'category': 'vector3'},
+        {'blender': 'Normal', 'mtlx': 'out', 'type': 'vector3', 'category': 'vector3'},
+        {'blender': 'Tangent', 'mtlx': 'out', 'type': 'vector3', 'category': 'vector3'},
+        {'blender': 'True Normal', 'mtlx': 'out', 'type': 'vector3', 'category': 'vector3'},
+        {'blender': 'Incoming', 'mtlx': 'out', 'type': 'vector3', 'category': 'vector3'},
+        {'blender': 'Parametric', 'mtlx': 'out', 'type': 'vector3', 'category': 'vector3'},
+        {'blender': 'Backfacing', 'mtlx': 'out', 'type': 'float', 'category': 'float'},
+        {'blender': 'Pointiness', 'mtlx': 'out', 'type': 'float', 'category': 'float'},
+        {'blender': 'Random Per Island', 'mtlx': 'out', 'type': 'float', 'category': 'float'},
+    ],
+    'OBJECT_INFO': [
+        {'blender': 'Location', 'mtlx': 'out', 'type': 'vector3', 'category': 'vector3'},
+        {'blender': 'Color', 'mtlx': 'out', 'type': 'color3', 'category': 'color3'},
+        {'blender': 'Alpha', 'mtlx': 'out', 'type': 'float', 'category': 'float'},
+        {'blender': 'Object Index', 'mtlx': 'out', 'type': 'float', 'category': 'float'},
+        {'blender': 'Material Index', 'mtlx': 'out', 'type': 'float', 'category': 'float'},
+        {'blender': 'Random', 'mtlx': 'out', 'type': 'float', 'category': 'float'},
+    ],
+    'LIGHT_PATH': [
+        {'blender': 'Is Camera Ray', 'mtlx': 'out', 'type': 'float', 'category': 'float'},
+        {'blender': 'Is Shadow Ray', 'mtlx': 'out', 'type': 'float', 'category': 'float'},
+        {'blender': 'Is Diffuse Ray', 'mtlx': 'out', 'type': 'float', 'category': 'float'},
+        {'blender': 'Is Glossy Ray', 'mtlx': 'out', 'type': 'float', 'category': 'float'},
+        {'blender': 'Is Singular Ray', 'mtlx': 'out', 'type': 'float', 'category': 'float'},
+        {'blender': 'Is Reflection Ray', 'mtlx': 'out', 'type': 'float', 'category': 'float'},
+        {'blender': 'Is Transmission Ray', 'mtlx': 'out', 'type': 'float', 'category': 'float'},
+        {'blender': 'Ray Length', 'mtlx': 'out', 'type': 'float', 'category': 'float'},
+        {'blender': 'Ray Depth', 'mtlx': 'out', 'type': 'float', 'category': 'float'},
+        {'blender': 'Diffuse Depth', 'mtlx': 'out', 'type': 'float', 'category': 'float'},
+        {'blender': 'Glossy Depth', 'mtlx': 'out', 'type': 'float', 'category': 'float'},
+        {'blender': 'Transparent Depth', 'mtlx': 'out', 'type': 'float', 'category': 'float'},
+        {'blender': 'Transmission Depth', 'mtlx': 'out', 'type': 'float', 'category': 'float'},
+    ],
+}
+
+# Robust Blender-to-MaterialX node mapping with explicit input/output relationships
+NODE_MAPPING = {
+    'TEX_COORD': {
+        'mtlx_type': 'texcoord',
+        'mtlx_category': 'vector2',
+        'outputs': {
+            'Generated': 'out',
+            'Normal': 'out',
+            'UV': 'out',
+            'Object': 'out',
+            'Camera': 'out',
+            'Window': 'out',
+            'Reflection': 'out',
+        }
+    },
+    'RGB': {
+        'mtlx_type': 'constant',
+        'mtlx_category': 'color3',
+        'outputs': {
+            'Color': 'out',
+        }
+    },
+    'VALUE': {
+        'mtlx_type': 'constant',
+        'mtlx_category': 'float',
+        'outputs': {
+            'Value': 'out',
+        }
+    },
+    'MIX': {
+        'mtlx_type': 'mix',
+        'mtlx_category': 'color3',
+        'inputs': {
+            'A': 'fg',
+            'B': 'bg',
+            'Factor': 'mix',
+            'Color1': 'fg',
+            'Color2': 'bg',
+            'Fac': 'mix',
+        },
+        'outputs': {
+            'Result': 'out',
+        }
+    },
+    'MIX_RGB': {
+        'mtlx_type': 'mix',
+        'mtlx_category': 'color3',
+        'inputs': {
+            'Color1': 'fg',
+            'Color2': 'bg',
+            'Fac': 'mix',
+        },
+        'outputs': {
+            'Color': 'out',
+        }
+    },
+    'INVERT': {
+        'mtlx_type': 'invert',
+        'mtlx_category': 'color3',
+        'inputs': {
+            'Color': 'in',
+        },
+        'outputs': {
+            'Color': 'out',
+        }
+    },
+    'SEPARATE_COLOR': {
+        'mtlx_type': 'separate3',
+        'mtlx_category': 'color3',
+        'inputs': {
+            'Color': 'in',
+        },
+        'outputs': {
+            'R': 'outr',
+            'G': 'outg',
+            'B': 'outb',
+        }
+    },
+    'COMBINE_COLOR': {
+        'mtlx_type': 'combine3',
+        'mtlx_category': 'color3',
+        'inputs': {
+            'R': 'r',
+            'G': 'g',
+            'B': 'b',
+        },
+        'outputs': {
+            'Image': 'out',
+        }
+    },
+    'CHECKER_TEXTURE': {
+        'mtlx_type': 'checkerboard',
+        'mtlx_category': 'color3',
+        'inputs': {
+            'Color1': 'in1',
+            'Color2': 'in2',
+            'Vector': 'texcoord',
+        },
+        'outputs': {
+            'Color': 'out',
+        }
+    },
+    'TEX_NOISE': {
+        'mtlx_type': 'fractal3d',
+        'mtlx_category': 'color3',
+        'inputs': {
+            'Vector': 'position',
+            'Scale': 'lacunarity',
+            'Detail': 'octaves',
+            'Roughness': 'diminish',
+        },
+        'outputs': {
+            'Fac': 'out',
+            'Color': 'out',
+        }
+    },
+    'TEX_VORONOI': {
+        'mtlx_type': 'voronoi',
+        'mtlx_category': 'color3',
+        'inputs': {
+            'Vector': 'position',
+            'Scale': 'scale',
+            'Detail': 'detail',
+        },
+        'outputs': {
+            'Distance': 'out',
+            'Color': 'out',
+        }
+    },
+    'TEX_WAVE': {
+        'mtlx_type': 'wave',
+        'mtlx_category': 'color3',
+        'inputs': {
+            'Vector': 'position',
+            'Scale': 'scale',
+            'Distortion': 'distortion',
+            'Detail': 'detail',
+        },
+        'outputs': {
+            'Fac': 'out',
+            'Color': 'out',
+        }
+    },
+    'TEX_CHECKER': {
+        'mtlx_type': 'checkerboard',
+        'mtlx_category': 'color3',
+        'inputs': {
+            'Vector': 'texcoord',
+            'Color1': 'in1',
+            'Color2': 'in2',
+        },
+        'outputs': {
+            'Color': 'out',
+        }
+    },
+    'CURVE_RGB': {
+        'mtlx_type': 'curve',
+        'mtlx_category': 'color3',
+        'inputs': {
+            'Color': 'in',
+        },
+        'outputs': {
+            'Color': 'out',
+        }
+    },
+    'CLAMP': {
+        'mtlx_type': 'clamp',
+        'mtlx_category': 'color3',
+        'inputs': {
+            'Value': 'in',
+            'Min': 'low',
+            'Max': 'high',
+        },
+        'outputs': {
+            'Result': 'out',
+        }
+    },
+    'MAP_RANGE': {
+        'mtlx_type': 'maprange',
+        'mtlx_category': 'color3',
+        'inputs': {
+            'Value': 'in',
+            'From Min': 'inlow',
+            'From Max': 'inhigh',
+            'To Min': 'outlow',
+            'To Max': 'outhigh',
+        },
+        'outputs': {
+            'Result': 'out',
+        }
+    },
+    'GRADIENT_TEXTURE': {
+        'mtlx_type': 'ramplr',
+        'mtlx_category': 'color3',
+        'inputs': {
+            'Vector': 'texcoord',
+        },
+        'outputs': {
+            'Color': 'out',
+        }
+    },
+    'WAVE_TEXTURE': {
+        'mtlx_type': 'wave',
+        'mtlx_category': 'color3',
+        'inputs': {
+            'Vector': 'texcoord',
+            'Scale': 'scale',
+            'Distortion': 'distortion',
+            'Detail': 'detail',
+        },
+        'outputs': {
+            'Color': 'out',
+        }
+    },
+    'NORMAL_MAP': {
+        'mtlx_type': 'normalmap',
+        'mtlx_category': 'vector3',
+        'inputs': {
+            'Color': 'default',
+        },
+        'outputs': {
+            'Normal': 'out',
+        }
+    },
+    'VALTORGB': {
+        'mtlx_type': 'ramplr',
+        'mtlx_category': 'color3',
+        'inputs': {
+            'Fac': 'texcoord',
+        },
+        'outputs': {
+            'Color': 'out',
+        }
+    },
+    'BUMP': {
+        'mtlx_type': 'bump',
+        'mtlx_category': 'vector3',
+        'inputs': {
+            'Height': 'in',
+        },
+        'outputs': {
+            'Normal': 'out',
+        }
+    },
+    'MAPPING': {
+        'mtlx_type': 'transform2d',
+        'mtlx_category': 'vector2',
+        'inputs': {
+            'Vector': 'in',
+        },
+        'outputs': {
+            'Vector': 'out',
+        }
+    },
+    'MATH': {
+        'mtlx_type': 'add',  # Will be overridden by operation
+        'mtlx_category': 'float',
+        'inputs': {
+            'A': 'in1',
+            'B': 'in2',
+        },
+        'outputs': {
+            'Value': 'out',
+        }
+    },
+    'VECTOR_MATH': {
+        'mtlx_type': 'add',  # Will be overridden by operation
+        'mtlx_category': 'vector3',
+        'inputs': {
+            'A': 'in1',
+            'B': 'in2',
+        },
+        'outputs': {
+            'Vector': 'out',
+        }
+    },
+    'IMAGE_TEXTURE': {
+        'mtlx_type': 'image',
+        'mtlx_category': 'color3',
+        'inputs': {
+            'Vector': 'texcoord',
+        },
+        'outputs': {
+            'Color': 'out',
+        }
+    },
+    'BSDF_PRINCIPLED': {
+        'mtlx_type': 'standard_surface',
+        'mtlx_category': 'surfaceshader',
+        'inputs': {
+            'Base Color': 'base_color',
+            'Metallic': 'metallic',
+            'Roughness': 'roughness',
+            'Specular': 'specular',
+            'IOR': 'ior',
+            'Transmission': 'transmission',
+            'Alpha': 'opacity',
+            'Normal': 'normal',
+            'Emission Color': 'emission_color',
+            'Emission Strength': 'emission',
+            'Subsurface': 'subsurface',
+            'Subsurface Radius': 'subsurface_radius',
+            'Subsurface Scale': 'subsurface_scale',
+            'Subsurface Anisotropy': 'subsurface_anisotropy',
+            'Sheen': 'sheen',
+            'Sheen Tint': 'sheen_tint',
+            'Sheen Roughness': 'sheen_roughness',
+        },
+        'outputs': {
+            'BSDF': 'out',
+        }
+    },
+
+    'TEX_MUSGRAVE': {
+        'mtlx_type': 'musgrave',
+        'mtlx_category': 'color3',
+        'inputs': {
+            'Vector': 'texcoord',
+            'Scale': 'scale',
+            'Detail': 'detail',
+            'Dimension': 'dimension',
+            'Lacunarity': 'lacunarity',
+        },
+        'outputs': {
+            'Fac': 'out',
+            'Color': 'out',
+        }
+    },
+    # New utility nodes
+    'NEW_GEOMETRY': {
+        'mtlx_type': 'position',
+        'mtlx_category': 'vector3',
+        'outputs': {
+            'Position': 'out',
+            'Normal': 'out',
+            'Tangent': 'out',
+            'True Normal': 'out',
+            'Incoming': 'out',
+            'Parametric': 'out',
+            'Backfacing': 'out',
+            'Pointiness': 'out',
+            'Random Per Island': 'out',
+        }
+    },
+    'OBJECT_INFO': {
+        'mtlx_type': 'constant',
+        'mtlx_category': 'vector3',
+        'outputs': {
+            'Location': 'out',
+            'Color': 'out',
+            'Alpha': 'out',
+            'Object Index': 'out',
+            'Material Index': 'out',
+            'Random': 'out',
+        }
+    },
+    'LIGHT_PATH': {
+        'mtlx_type': 'constant',
+        'mtlx_category': 'float',
+        'outputs': {
+            'Is Camera Ray': 'out',
+            'Is Shadow Ray': 'out',
+            'Is Diffuse Ray': 'out',
+            'Is Glossy Ray': 'out',
+            'Is Singular Ray': 'out',
+            'Is Reflection Ray': 'out',
+            'Is Transmission Ray': 'out',
+            'Ray Length': 'out',
+            'Ray Depth': 'out',
+            'Diffuse Depth': 'out',
+            'Glossy Depth': 'out',
+            'Transparent Depth': 'out',
+            'Transmission Depth': 'out',
+        }
+    },
 }
 
 
@@ -197,14 +709,38 @@ def map_node_with_schema_enhanced(node, builder, schema, node_type, node_categor
             is_connected, value_or_node, type_str = get_input_value_or_connection(node, blender_input, exported_nodes)
             
             if is_connected:
-                # Connected input - add to nodegraph output
-                builder.add_output(mtlx_param, param_type, value_or_node)
-                # Connect to node input using type-safe method
-                builder.node_builder.create_mtlx_input(
-                    builder.nodes[node_name], mtlx_param, 
-                    nodename=value_or_node,
-                    node_type=node_type, category=param_category
-                )
+                # Connected input - use robust connection mapping
+                # Get the source node type and output name
+                source_node_type = None
+                source_output_name = None
+                if exported_nodes:
+                    # Find the source node by looking up the MaterialX node name
+                    for node_obj, node_name_in_exported in exported_nodes.items():
+                        if node_name_in_exported == value_or_node:
+                            source_node_type = node_obj.type
+                            # Get the output name from the source node's output socket
+                            for output_socket in node_obj.outputs:
+                                if output_socket.links:
+                                    for link in output_socket.links:
+                                        if link.to_node == node and link.to_socket.name == blender_input:
+                                            source_output_name = output_socket.name
+                                            break
+                                    if source_output_name:
+                                        break
+                            break
+                
+                # Get the correct output name using robust mapping
+                if source_node_type and source_output_name:
+                    output_name = get_node_output_name_robust(source_node_type, source_output_name)
+                else:
+                    # Fallback to default output name
+                    output_name = 'out'
+                
+                # Get the correct input name using robust mapping
+                correct_input_name = get_node_input_name_robust(node.type, blender_input)
+                print(f"DEBUG: Robust mapping - node type: {node.type}, blender input: {blender_input}, mtlx param: {mtlx_param}, correct input: {correct_input_name}")
+                
+                builder.add_connection(value_or_node, output_name, node_name, correct_input_name)
             else:
                 # Constant input - use type-safe input creation
                 builder.library_builder.node_builder.create_mtlx_input(
@@ -303,6 +839,48 @@ class MaterialXBuilder:
         if hasattr(self.library_builder, 'get_performance_stats'):
             return self.library_builder.get_performance_stats()
         return {}  # Default to empty dict if not available
+    
+    def get_node_output_name(self, node_type: str, node_category: str = None) -> str:
+        """
+        Get the default output name for a given node type by looking up the actual MaterialX node definition.
+        
+        Args:
+            node_type: The MaterialX node type
+            node_category: The node category
+            
+        Returns:
+            str: The default output name for the node type
+        """
+        try:
+            # Get the node definition from the MaterialX library
+            node_def = self.library_builder.document_manager.get_node_definition(node_type, node_category)
+            
+            if node_def:
+                # Get all outputs from the node definition
+                outputs = node_def.getOutputs()
+                
+                if outputs:
+                    # Return the first output name (most nodes have a single output)
+                    first_output = outputs[0]
+                    output_name = first_output.getName()
+                    self.logger.debug(f"Found output '{output_name}' for node type '{node_type}'")
+                    return output_name
+                else:
+                    self.logger.warning(f"No outputs found for node type '{node_type}'")
+            else:
+                self.logger.warning(f"No node definition found for '{node_type}' (category: {node_category})")
+                
+        except Exception as e:
+            self.logger.error(f"Error getting output name for node type '{node_type}': {str(e)}")
+        
+        # Fallback to common output names if lookup fails
+        fallback_names = {
+            'separate3': 'outr',  # separate3 has outr, outg, outb
+            'split3': 'out1',     # split3 has out1, out2, out3
+            'split2': 'out1',     # split2 has out1, out2
+        }
+        
+        return fallback_names.get(node_type, 'out')
 
 
 class NodeMapper:
@@ -331,6 +909,10 @@ class NodeMapper:
             'TEX_CHECKER': NodeMapper.map_checker_texture_enhanced,
             'TEX_GRADIENT': NodeMapper.map_gradient_texture_enhanced,
             'TEX_NOISE': NodeMapper.map_noise_texture_enhanced,
+            'TEX_VORONOI': NodeMapper.map_voronoi_texture_enhanced,
+            'CURVE_RGB': NodeMapper.map_curve_rgb_enhanced,
+            'CLAMP': NodeMapper.map_clamp_enhanced,
+            'MAP_RANGE': NodeMapper.map_map_range_enhanced,
             'MAPPING': NodeMapper.map_mapping,
             'LAYER': NodeMapper.map_layer,
             'ADD': NodeMapper.map_add,
@@ -353,6 +935,12 @@ class NodeMapper:
             'COMBINE_RGB': NodeMapper.map_merge_color,
             'SEPARATE_XYZ': NodeMapper.map_split_vector,
             'COMBINE_XYZ': NodeMapper.map_merge_vector,
+
+            'TEX_MUSGRAVE': NodeMapper.map_musgrave_texture_enhanced,
+            # New utility nodes
+            'NEW_GEOMETRY': NodeMapper.map_geometry_info_enhanced,
+            'OBJECT_INFO': NodeMapper.map_object_info_enhanced,
+            'LIGHT_PATH': NodeMapper.map_light_path_enhanced,
         }
         return mappers.get(node_type)
     
@@ -455,7 +1043,36 @@ class NodeMapper:
         try:
             is_connected, value_or_node, type_str = get_input_value_or_connection(node, 'Color', exported_nodes)
             if is_connected:
-                builder.add_connection(value_or_node, 'out', node_name, 'in')
+                # Get the correct output name from the source node using robust mapping
+                source_node_type = None
+                source_output_name = None
+                if exported_nodes:
+                    for node_obj, node_name_in_exported in exported_nodes.items():
+                        if node_name_in_exported == value_or_node:
+                            source_node_type = node_obj.type
+                            # Get the output name from the source node's output socket
+                            for output_socket in node_obj.outputs:
+                                if output_socket.links:
+                                    for link in output_socket.links:
+                                        if link.to_node == node and link.to_socket.name == 'Color':
+                                            source_output_name = output_socket.name
+                                            break
+                                    if source_output_name:
+                                        break
+                            break
+                
+                # Get the correct output name using robust mapping
+                if source_node_type and source_output_name:
+                    output_name = get_node_output_name_robust(source_node_type, source_output_name)
+                else:
+                    # Fallback to default output name
+                    output_name = 'out'
+                
+                # Get the correct input name using robust mapping
+                correct_input_name = get_node_input_name_robust(node.type, 'Color')
+                print(f"DEBUG: Normal map robust mapping - node type: {node.type}, blender input: Color, correct input: {correct_input_name}")
+                
+                builder.add_connection(value_or_node, output_name, node_name, correct_input_name)
             else:
                 # Set default normal value
                 builder.library_builder.node_builder.create_mtlx_input(
@@ -545,7 +1162,41 @@ class NodeMapper:
                     is_connected, value_or_node, type_str = get_input_value_or_connection(node, blender_input, exported_nodes)
                     
                     if is_connected:
-                        builder.add_connection(value_or_node, 'out', node_name, mtlx_param)
+                        # Get the correct output name from the source node
+                        source_node_type = None
+                        if exported_nodes:
+                            for node_obj, node_name_in_exported in exported_nodes.items():
+                                if node_name_in_exported == value_or_node:
+                                    source_node_type = node_obj.type
+                                    break
+                        
+                        # Map Blender node type to MaterialX node type
+                        blender_to_mtlx_type = {
+                            'TEX_COORD': 'texcoord',
+                            'RGB': 'constant',
+                            'VALUE': 'constant',
+                            'MIX': 'mix',
+                            'INVERT': 'invert',
+                            'SEPARATE_COLOR': 'separate3',
+                            'COMBINE_COLOR': 'combine3',
+                            'CHECKER_TEXTURE': 'checkerboard',
+                            'GRADIENT_TEXTURE': 'ramplr',
+                            'NOISE_TEXTURE': 'fractal3d',
+                            'WAVE_TEXTURE': 'wave',
+                            'NORMAL_MAP': 'normalmap',
+                            'BUMP': 'bump',
+                            'MAPPING': 'transform2d',
+                            'LAYER_WEIGHT': 'layer',
+                            'MATH': 'add',
+                            'VECTOR_MATH': 'add',
+                            'IMAGE_TEXTURE': 'image',
+                            'BSDF_PRINCIPLED': 'standard_surface',
+                        }
+                        
+                        mtlx_source_type = blender_to_mtlx_type.get(source_node_type, 'constant')
+                        output_name = builder.get_node_output_name(mtlx_source_type)
+                        
+                        builder.add_connection(value_or_node, output_name, node_name, mtlx_param)
                     else:
                         # Set default value using type-safe method
                         default_value = [0.0, 0.0, 0.0] if blender_input == 'A' else [0.0, 0.0, 0.0]
@@ -628,7 +1279,41 @@ class NodeMapper:
                     is_connected, value_or_node, type_str = get_input_value_or_connection(node, blender_input, exported_nodes)
                     
                     if is_connected:
-                        builder.add_connection(value_or_node, 'out', node_name, mtlx_param)
+                        # Get the correct output name from the source node
+                        source_node_type = None
+                        if exported_nodes:
+                            for node_obj, node_name_in_exported in exported_nodes.items():
+                                if node_name_in_exported == value_or_node:
+                                    source_node_type = node_obj.type
+                                    break
+                        
+                        # Map Blender node type to MaterialX node type
+                        blender_to_mtlx_type = {
+                            'TEX_COORD': 'texcoord',
+                            'RGB': 'constant',
+                            'VALUE': 'constant',
+                            'MIX': 'mix',
+                            'INVERT': 'invert',
+                            'SEPARATE_COLOR': 'separate3',
+                            'COMBINE_COLOR': 'combine3',
+                            'CHECKER_TEXTURE': 'checkerboard',
+                            'GRADIENT_TEXTURE': 'ramplr',
+                            'NOISE_TEXTURE': 'fractal3d',
+                            'WAVE_TEXTURE': 'wave',
+                            'NORMAL_MAP': 'normalmap',
+                            'BUMP': 'bump',
+                            'MAPPING': 'transform2d',
+                            'LAYER_WEIGHT': 'layer',
+                            'MATH': 'add',
+                            'VECTOR_MATH': 'add',
+                            'IMAGE_TEXTURE': 'image',
+                            'BSDF_PRINCIPLED': 'standard_surface',
+                        }
+                        
+                        mtlx_source_type = blender_to_mtlx_type.get(source_node_type, 'constant')
+                        output_name = builder.get_node_output_name(mtlx_source_type)
+                        
+                        builder.add_connection(value_or_node, output_name, node_name, mtlx_param)
                     else:
                         # Set default value using type-safe method
                         default_value = 0.0 if blender_input == 'A' else 0.0
@@ -682,6 +1367,26 @@ class NodeMapper:
     def map_wave_texture_enhanced(node, builder: MaterialXBuilder, input_nodes: Dict, input_nodes_by_index: Dict = None, blender_node=None, constant_manager=None, exported_nodes=None) -> str:
         """Enhanced wave texture mapping with type-safe input creation."""
         return map_node_with_schema_enhanced(node, builder, NODE_SCHEMAS['WAVE_TEXTURE'], 'wave', 'color3', constant_manager, exported_nodes)
+    
+    @staticmethod
+    def map_voronoi_texture_enhanced(node, builder: MaterialXBuilder, input_nodes: Dict, input_nodes_by_index: Dict = None, blender_node=None, constant_manager=None, exported_nodes=None) -> str:
+        """Enhanced voronoi texture mapping with type-safe input creation."""
+        return map_node_with_schema_enhanced(node, builder, NODE_SCHEMAS['VORONOI_TEXTURE'], 'voronoi', 'color3', constant_manager, exported_nodes)
+    
+    @staticmethod
+    def map_curve_rgb_enhanced(node, builder: MaterialXBuilder, input_nodes: Dict, input_nodes_by_index: Dict = None, blender_node=None, constant_manager=None, exported_nodes=None) -> str:
+        """Enhanced RGB curves mapping with type-safe input creation."""
+        return map_node_with_schema_enhanced(node, builder, NODE_SCHEMAS['CURVE_RGB'], 'curve', 'color3', constant_manager, exported_nodes)
+    
+    @staticmethod
+    def map_clamp_enhanced(node, builder: MaterialXBuilder, input_nodes: Dict, input_nodes_by_index: Dict = None, blender_node=None, constant_manager=None, exported_nodes=None) -> str:
+        """Enhanced clamp mapping with type-safe input creation."""
+        return map_node_with_schema_enhanced(node, builder, NODE_SCHEMAS['CLAMP'], 'clamp', 'color3', constant_manager, exported_nodes)
+    
+    @staticmethod
+    def map_map_range_enhanced(node, builder: MaterialXBuilder, input_nodes: Dict, input_nodes_by_index: Dict = None, blender_node=None, constant_manager=None, exported_nodes=None) -> str:
+        """Enhanced map range mapping with type-safe input creation."""
+        return map_node_with_schema_enhanced(node, builder, NODE_SCHEMAS['MAP_RANGE'], 'maprange', 'color3', constant_manager, exported_nodes)
     
     # Legacy methods for backward compatibility
     @staticmethod
@@ -791,6 +1496,29 @@ class NodeMapper:
         """Map Combine XYZ node to MaterialX combine3 node."""
         node_name = builder.add_node("combine3", f"merge_vector_{node.name}", "vector3")
         return node_name
+
+
+
+    @staticmethod
+    def map_musgrave_texture_enhanced(node, builder: MaterialXBuilder, input_nodes: Dict, input_nodes_by_index: Dict = None, blender_node=None, constant_manager=None, exported_nodes=None) -> str:
+        """Enhanced musgrave texture mapping with type-safe input creation."""
+        return map_node_with_schema_enhanced(node, builder, NODE_SCHEMAS['TEX_MUSGRAVE'], 'musgrave', 'color3', constant_manager, exported_nodes)
+
+    # New utility node mappers
+    @staticmethod
+    def map_geometry_info_enhanced(node, builder: MaterialXBuilder, input_nodes: Dict, input_nodes_by_index: Dict = None, blender_node=None, constant_manager=None, exported_nodes=None) -> str:
+        """Enhanced geometry info mapping with type-safe input creation."""
+        return map_node_with_schema_enhanced(node, builder, NODE_SCHEMAS['NEW_GEOMETRY'], 'position', 'vector3', constant_manager, exported_nodes)
+
+    @staticmethod
+    def map_object_info_enhanced(node, builder: MaterialXBuilder, input_nodes: Dict, input_nodes_by_index: Dict = None, blender_node=None, constant_manager=None, exported_nodes=None) -> str:
+        """Enhanced object info mapping with type-safe input creation."""
+        return map_node_with_schema_enhanced(node, builder, NODE_SCHEMAS['OBJECT_INFO'], 'constant', 'vector3', constant_manager, exported_nodes)
+
+    @staticmethod
+    def map_light_path_enhanced(node, builder: MaterialXBuilder, input_nodes: Dict, input_nodes_by_index: Dict = None, blender_node=None, constant_manager=None, exported_nodes=None) -> str:
+        """Enhanced light path mapping with type-safe input creation."""
+        return map_node_with_schema_enhanced(node, builder, NODE_SCHEMAS['LIGHT_PATH'], 'constant', 'float', constant_manager, exported_nodes)
 
 
 class MaterialXExporter:

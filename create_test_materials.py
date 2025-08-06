@@ -363,6 +363,137 @@ def create_math_heavy_material():
     
     return material
 
+
+
+def create_musgrave_texture_material():
+    """Create a material with Musgrave Texture node."""
+    material = bpy.data.materials.new(name="MusgraveTexture")
+    material.use_nodes = True
+    nodes = material.node_tree.nodes
+    links = material.node_tree.links
+    
+    # Clear default nodes
+    nodes.clear()
+    
+    # Create nodes
+    tex_coord = nodes.new(type='ShaderNodeTexCoord')
+    tex_coord.location = (-600, 0)
+    
+    musgrave_tex = nodes.new(type='ShaderNodeTexMusgrave')
+    musgrave_tex.location = (-400, 0)
+    musgrave_tex.inputs['Scale'].default_value = 5.0
+    musgrave_tex.inputs['Detail'].default_value = 2.0
+    musgrave_tex.inputs['Dimension'].default_value = 2.0
+    musgrave_tex.inputs['Lacunarity'].default_value = 2.0
+    
+    color_ramp = nodes.new(type='ShaderNodeValToRGB')
+    color_ramp.location = (-200, 0)
+    color_ramp.color_ramp.elements[0].position = 0.4
+    color_ramp.color_ramp.elements[0].color = (0.1, 0.1, 0.1, 1.0)
+    color_ramp.color_ramp.elements[1].position = 0.6
+    color_ramp.color_ramp.elements[1].color = (0.8, 0.8, 0.8, 1.0)
+    
+    principled = nodes.new(type='ShaderNodeBsdfPrincipled')
+    principled.location = (0, 0)
+    
+    output = nodes.new(type='ShaderNodeOutputMaterial')
+    output.location = (300, 0)
+    
+    # Connect
+    links.new(tex_coord.outputs['Generated'], musgrave_tex.inputs['Vector'])
+    links.new(musgrave_tex.outputs['Fac'], color_ramp.inputs['Fac'])
+    links.new(color_ramp.outputs['Color'], principled.inputs['Base Color'])
+    links.new(principled.outputs['BSDF'], output.inputs['Surface'])
+    
+    return material
+
+def create_geometry_info_material():
+    """Create a material with Geometry Info node."""
+    material = bpy.data.materials.new(name="GeometryInfo")
+    material.use_nodes = True
+    nodes = material.node_tree.nodes
+    links = material.node_tree.links
+    
+    # Clear default nodes
+    nodes.clear()
+    
+    # Create nodes
+    geometry = nodes.new(type='ShaderNodeNewGeometry')
+    geometry.location = (-600, 0)
+    
+    color_ramp = nodes.new(type='ShaderNodeValToRGB')
+    color_ramp.location = (-400, 0)
+    color_ramp.color_ramp.elements[0].position = 0.0
+    color_ramp.color_ramp.elements[0].color = (0.0, 0.0, 0.0, 1.0)
+    color_ramp.color_ramp.elements[1].position = 1.0
+    color_ramp.color_ramp.elements[1].color = (1.0, 1.0, 1.0, 1.0)
+    
+    principled = nodes.new(type='ShaderNodeBsdfPrincipled')
+    principled.location = (0, 0)
+    
+    output = nodes.new(type='ShaderNodeOutputMaterial')
+    output.location = (300, 0)
+    
+    # Connect - use position data
+    links.new(geometry.outputs['Position'], color_ramp.inputs['Fac'])
+    links.new(color_ramp.outputs['Color'], principled.inputs['Base Color'])
+    links.new(principled.outputs['BSDF'], output.inputs['Surface'])
+    
+    return material
+
+def create_object_info_material():
+    """Create a material with Object Info node."""
+    material = bpy.data.materials.new(name="ObjectInfo")
+    material.use_nodes = True
+    nodes = material.node_tree.nodes
+    links = material.node_tree.links
+    
+    # Clear default nodes
+    nodes.clear()
+    
+    # Create nodes
+    object_info = nodes.new(type='ShaderNodeObjectInfo')
+    object_info.location = (-600, 0)
+    
+    principled = nodes.new(type='ShaderNodeBsdfPrincipled')
+    principled.location = (0, 0)
+    
+    output = nodes.new(type='ShaderNodeOutputMaterial')
+    output.location = (300, 0)
+    
+    # Connect - use object color
+    links.new(object_info.outputs['Color'], principled.inputs['Base Color'])
+    links.new(principled.outputs['BSDF'], output.inputs['Surface'])
+    
+    return material
+
+def create_light_path_material():
+    """Create a material with Light Path node."""
+    material = bpy.data.materials.new(name="LightPath")
+    material.use_nodes = True
+    nodes = material.node_tree.nodes
+    links = material.node_tree.links
+    
+    # Clear default nodes
+    nodes.clear()
+    
+    # Create nodes
+    light_path = nodes.new(type='ShaderNodeLightPath')
+    light_path.location = (-600, 0)
+    
+    principled = nodes.new(type='ShaderNodeBsdfPrincipled')
+    principled.location = (0, 0)
+    principled.inputs['Base Color'].default_value = (0.8, 0.8, 0.8, 1.0)
+    
+    output = nodes.new(type='ShaderNodeOutputMaterial')
+    output.location = (300, 0)
+    
+    # Connect - use camera ray info to control emission
+    links.new(light_path.outputs['Is Camera Ray'], principled.inputs['Emission Strength'])
+    links.new(principled.outputs['BSDF'], output.inputs['Surface'])
+    
+    return material
+
 def create_test_scene_and_save(material_func, filename):
     """Create a test scene with the given material and save it."""
     clear_scene()
@@ -425,6 +556,11 @@ def main():
         (create_emission_material, "EmissionMaterial"),
         (create_mixed_shader_material, "MixedShader"),
         (create_math_heavy_material, "MathHeavy"),
+
+        (create_musgrave_texture_material, "MusgraveTexture"),
+        (create_geometry_info_material, "GeometryInfo"),
+        (create_object_info_material, "ObjectInfo"),
+        (create_light_path_material, "LightPath"),
     ]
     
     created_files = []
