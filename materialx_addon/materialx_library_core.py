@@ -633,10 +633,25 @@ class MaterialXDocumentManager:
                 # If no exact match by type, try searching by node name
                 print(f"DEBUG: No exact match by type, trying search by name...")
                 self.logger.info(f"No exact match by type, trying search by name...")
+                
+                # Debug: Show some node names that contain our search term
+                matching_names = []
                 for nodedef in all_node_defs:
                     nodedef_name = nodedef.getName()
-                    if node_type in nodedef_name:
-                        if category is None or nodedef.getCategory() == category:
+                    if node_type.lower() in nodedef_name.lower():
+                        matching_names.append(nodedef_name)
+                
+                if matching_names:
+                    print(f"DEBUG: Found {len(matching_names)} node names containing '{node_type}': {matching_names[:5]}")
+                
+                for nodedef in all_node_defs:
+                    nodedef_name = nodedef.getName()
+                    # Look for the node type in the name (e.g., "standard_surface" in "ND_standard_surface_surfaceshader")
+                    if node_type.lower() in nodedef_name.lower():
+                        nodedef_category = nodedef.getCategory()
+                        nodedef_type = nodedef.getType()
+                        print(f"DEBUG: Checking {nodedef_name} - category: {nodedef_category}, type: {nodedef_type}, expected: {category}")
+                        if category is None or nodedef_type == category:
                             result = nodedef
                             print(f"DEBUG: Found match by name: {nodedef_name} (type: {nodedef.getType()})")
                             self.logger.info(f"Found match by name: {nodedef_name} (type: {nodedef.getType()})")

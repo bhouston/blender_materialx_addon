@@ -61,6 +61,8 @@ Use the development script to install the addon to the latest Blender version:
 python3 dev_upgrade_addon.py
 ```
 
+**Important**: When making code changes to the addon, you must run this script to deploy the changes to Blender. Blender caches addon modules, so direct file edits don't immediately take effect.
+
 ## 🎮 Usage
 
 ### In Blender
@@ -98,6 +100,36 @@ python cmdline_export.py <blend_file> <material_name> <output_mtlx_file> [option
 - `--relative-paths` : Use relative paths for textures
 - `--copy-textures` : Copy texture files
 - `--active-uvmap NAME` : Active UV map name
+
+## 🔧 Development
+
+### Making Code Changes
+
+When developing or debugging the addon:
+
+1. **Make your code changes** to the addon files in `materialx_addon/`
+2. **Deploy the changes** using the development script:
+   ```bash
+   python3 dev_upgrade_addon.py
+   ```
+3. **Restart Blender** or reload the addon to see changes take effect
+
+**Why This is Required**: Blender caches addon modules for performance. The `dev_upgrade_addon.py` script ensures your changes are properly installed and cached by Blender.
+
+### Testing Changes
+
+After deploying changes, test them using the provided test scripts:
+
+```bash
+# Test basic MaterialX library functionality
+/Applications/Blender.app/Contents/MacOS/Blender --background --python test/test_materialx_library.py
+
+# Test simple material export
+/Applications/Blender.app/Contents/MacOS/Blender --background --python test/simple_export_test.py
+
+# Test node definition lookup
+/Applications/Blender.app/Contents/MacOS/Blender --background --python test/test_node_definition.py
+```
 - `--blender-path PATH` : Path to Blender executable
 - `--optimize-document` : Enable document optimization
 - `--advanced-validation` : Enable comprehensive validation
