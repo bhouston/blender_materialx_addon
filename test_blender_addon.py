@@ -32,8 +32,7 @@ def setup_logging():
         level=logging.INFO,
         format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
         handlers=[
-            logging.StreamHandler(sys.stdout),
-            logging.FileHandler('blender_addon_test.log')
+            logging.StreamHandler(sys.stdout)
         ]
     )
     return logging.getLogger('BlenderAddonTest')
@@ -656,10 +655,6 @@ ERROR CONDITION TESTS:
 
 {'='*80}
 """
-    
-    # Save report to file
-    with open('blender_addon_test_report.txt', 'w') as f:
-        f.write(report)
     
     logger.info(report)
 

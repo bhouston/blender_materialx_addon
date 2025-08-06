@@ -143,10 +143,11 @@ The test suite tracks:
 
 ## 📊 Test Results Output
 
-Test results are saved to:
+Test results are printed to stdout. To save the output to a file, use command line redirection:
 
-- `blender_addon_test.log`: Detailed test execution log
-- `blender_addon_test_report.txt`: Summary test report
+```bash
+python3 test_blender_addon.py > test_results.txt 2>&1
+```
 
 ### Sample Test Report
 
