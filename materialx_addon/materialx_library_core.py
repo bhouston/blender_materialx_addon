@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-MaterialX Library Core - Phase 1 & 2 Implementation
+MaterialX Library Core - Phase 1, 2 & 3 Implementation
 
 This module implements the core infrastructure migration from manual XML generation
 to MaterialX library APIs as outlined in the integration plan.
@@ -14,11 +14,19 @@ Phase 2: Node Mapping System Enhancement
 - Leverage node definitions for type-safe mapping
 - Implement automatic type conversion and validation
 - Enhanced node creation with validation
+
+Phase 3: Advanced Features Integration
+- File writing improvements with advanced options
+- Enhanced validation and error handling
+- Performance optimization and memory management
+- Error recovery and robustness features
 """
 
 import MaterialX as mx
 import os
 import sys
+import time
+import gc
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple, Any, Union
 import logging
@@ -30,6 +38,7 @@ try:
     from .mtlxutils import mxfile as mxf
     from .mtlxutils import mxnodegraph as mxg
     from .mtlxutils import mxtraversal as mxt
+
 except ImportError:
     # Fallback for direct import
     import mtlxutils
@@ -37,6 +46,344 @@ except ImportError:
     import mtlxutils.mxfile as mxf
     import mtlxutils.mxnodegraph as mxg
     import mtlxutils.mxtraversal as mxt
+
+
+
+class MaterialXValidationError(Exception):
+    """Custom exception for MaterialX validation errors."""
+    pass
+
+
+class MaterialXPerformanceMonitor:
+    """
+    Monitors performance metrics for MaterialX operations.
+    
+    This class provides:
+    - Operation timing
+    - Memory usage tracking
+    - Performance optimization suggestions
+    - Resource cleanup monitoring
+    """
+    
+    def __init__(self, logger):
+        self.logger = logger
+        self.operation_times = {}
+        self.memory_snapshots = {}
+        self.start_time = None
+        self.enabled = True
+    
+    def start_operation(self, operation_name: str):
+        """Start timing an operation."""
+        if not self.enabled:
+            return
+        
+        self.operation_times[operation_name] = {
+            'start': time.time(),
+            'memory_before': self._get_memory_usage()
+        }
+    
+    def end_operation(self, operation_name: str):
+        """End timing an operation and log results."""
+        if not self.enabled or operation_name not in self.operation_times:
+            return
+        
+        end_time = time.time()
+        memory_after = self._get_memory_usage()
+        
+        timing = self.operation_times[operation_name]
+        duration = end_time - timing['start']
+        memory_delta = memory_after - timing['memory_before']
+        
+        self.logger.debug(f"Operation '{operation_name}': {duration:.4f}s, Memory: {memory_delta:+d} bytes")
+        
+        # Performance warnings
+        if duration > 1.0:
+            self.logger.warning(f"Slow operation detected: '{operation_name}' took {duration:.4f}s")
+        if memory_delta > 10 * 1024 * 1024:  # 10MB
+            self.logger.warning(f"High memory usage detected: '{operation_name}' used {memory_delta / (1024*1024):.2f}MB")
+    
+    def _get_memory_usage(self) -> int:
+        """Get current memory usage in bytes."""
+        try:
+            import psutil
+            process = psutil.Process()
+            return process.memory_info().rss
+        except ImportError:
+            return 0
+    
+    def suggest_optimizations(self) -> List[str]:
+        """Analyze performance data and suggest optimizations."""
+        suggestions = []
+        
+        if not self.operation_times:
+            return suggestions
+        
+        # Find slowest operations
+        slow_operations = [(name, data.get('duration', 0)) 
+                          for name, data in self.operation_times.items()]
+        slow_operations.sort(key=lambda x: x[1], reverse=True)
+        
+        if slow_operations and slow_operations[0][1] > 0.5:
+            suggestions.append(f"Consider optimizing '{slow_operations[0][0]}' (took {slow_operations[0][1]:.4f}s)")
+        
+        return suggestions
+    
+    def cleanup(self):
+        """Clean up performance monitoring data."""
+        self.operation_times.clear()
+        self.memory_snapshots.clear()
+        gc.collect()
+
+
+
+
+
+class MaterialXAdvancedValidator:
+    """
+    Advanced validation features for MaterialX documents.
+    
+    This class provides:
+    - Comprehensive document validation
+    - Node definition validation
+    - Connection validation
+    - Performance validation
+    - Custom validation rules
+    """
+    
+    def __init__(self, logger):
+        self.logger = logger
+        self.validation_rules = {}
+        self.custom_validators = {}
+    
+    def validate_document_comprehensive(self, document: mx.Document) -> Dict[str, Any]:
+        """
+        Perform comprehensive validation of a MaterialX document.
+        
+        Args:
+            document: The MaterialX document to validate
+            
+        Returns:
+            Dict containing validation results
+        """
+        results = {
+            'valid': True,
+            'warnings': [],
+            'errors': [],
+            'performance_issues': [],
+            'suggestions': []
+        }
+        
+        try:
+            # Basic document validation
+            if not self._validate_basic_structure(document, results):
+                results['valid'] = False
+            
+            # Node validation
+            self._validate_nodes(document, results)
+            
+            # Connection validation
+            self._validate_connections(document, results)
+            
+            # Performance validation
+            self._validate_performance(document, results)
+            
+            # Custom validation rules
+            self._apply_custom_validators(document, results)
+            
+        except Exception as e:
+            results['valid'] = False
+            results['errors'].append(f"Validation failed with exception: {str(e)}")
+            self.logger.error(f"Document validation failed: {str(e)}")
+        
+        return results
+    
+    def _validate_basic_structure(self, document: mx.Document, results: Dict[str, Any]) -> bool:
+        """Validate basic document structure."""
+        try:
+            # Check for required elements
+            materials = document.getMaterialNodes()
+            if not materials:
+                results['warnings'].append("No material nodes found in document")
+            
+            # Check for surface shaders
+            surface_shaders = document.getNodesOfType(mx.SURFACE_SHADER_TYPE_STRING)
+            if not surface_shaders:
+                results['warnings'].append("No surface shader nodes found in document")
+            
+            # Check for nodegraphs
+            nodegraphs = document.getNodeGraphs()
+            if not nodegraphs:
+                results['warnings'].append("No nodegraphs found in document")
+            
+            return True
+            
+        except Exception as e:
+            results['errors'].append(f"Basic structure validation failed: {str(e)}")
+            return False
+    
+    def _validate_nodes(self, document: mx.Document, results: Dict[str, Any]):
+        """Validate all nodes in the document."""
+        try:
+            nodes = document.getNodes()
+            for node in nodes:
+                # Check node definition
+                nodedef = node.getNodeDef()
+                if not nodedef:
+                    results['warnings'].append(f"Node '{node.getName()}' has no node definition")
+                    continue
+                
+                # Check input connections
+                for input_elem in node.getInputs():
+                    if input_elem.isConnected():
+                        connected_node = input_elem.getConnectedNode()
+                        if not connected_node:
+                            results['errors'].append(f"Input '{input_elem.getName()}' on node '{node.getName()}' has invalid connection")
+                
+                # Check output connections
+                for output_elem in node.getOutputs():
+                    if output_elem.isConnected():
+                        # Validate downstream connections
+                        pass
+                        
+        except Exception as e:
+            results['errors'].append(f"Node validation failed: {str(e)}")
+    
+    def _validate_connections(self, document: mx.Document, results: Dict[str, Any]):
+        """Validate all connections in the document."""
+        try:
+            # Use mtlxutils for connection analysis
+            graph_builder = mxt.MtlxGraphBuilder(document)
+            graph_builder.execute()
+            
+            connections = graph_builder.getConnections()
+            for connection in connections:
+                # Validate connection types
+                upstream_elem = connection.getUpstreamElement()
+                downstream_elem = connection.getDownstreamElement()
+                
+                if upstream_elem and downstream_elem:
+                    # Check for circular connections
+                    if self._has_circular_connection(document, upstream_elem, downstream_elem):
+                        results['errors'].append(f"Circular connection detected between '{upstream_elem.getName()}' and '{downstream_elem.getName()}'")
+                        
+        except Exception as e:
+            results['errors'].append(f"Connection validation failed: {str(e)}")
+    
+    def _validate_performance(self, document: mx.Document, results: Dict[str, Any]):
+        """Validate document for performance issues."""
+        try:
+            # Check for excessive node count
+            nodes = document.getNodes()
+            if len(nodes) > 100:
+                results['performance_issues'].append(f"Large number of nodes ({len(nodes)}) may impact performance")
+            
+            # Check for deep nesting
+            nodegraphs = document.getNodeGraphs()
+            for nodegraph in nodegraphs:
+                depth = self._calculate_nesting_depth(nodegraph)
+                if depth > 5:
+                    results['performance_issues'].append(f"Deep nesting detected in nodegraph '{nodegraph.getName()}' (depth: {depth})")
+            
+            # Check for unused nodes
+            unused_nodes = self._find_unused_nodes(document)
+            if unused_nodes:
+                results['suggestions'].append(f"Found {len(unused_nodes)} unused nodes that could be removed")
+                
+        except Exception as e:
+            results['errors'].append(f"Performance validation failed: {str(e)}")
+    
+    def _has_circular_connection(self, document: mx.Document, start_elem: mx.Element, target_elem: mx.Element) -> bool:
+        """Check for circular connections."""
+        visited = set()
+        return self._dfs_for_circular(start_elem, target_elem, visited, document)
+    
+    def _dfs_for_circular(self, current: mx.Element, target: mx.Element, visited: set, document: mx.Document) -> bool:
+        """Depth-first search for circular connections."""
+        if current == target:
+            return True
+        
+        if current.getNamePath() in visited:
+            return False
+        
+        visited.add(current.getNamePath())
+        
+        # Check downstream connections
+        if current.isA(mx.Node):
+            for output in current.getOutputs():
+                if output.isConnected():
+                    for edge in output.getConnections():
+                        downstream = edge.getDownstreamElement()
+                        if downstream and self._dfs_for_circular(downstream, target, visited, document):
+                            return True
+        
+        return False
+    
+    def _calculate_nesting_depth(self, element: mx.Element, current_depth: int = 0) -> int:
+        """Calculate the nesting depth of an element."""
+        max_depth = current_depth
+        
+        for child in element.getChildren():
+            if child.isA(mx.NodeGraph):
+                child_depth = self._calculate_nesting_depth(child, current_depth + 1)
+                max_depth = max(max_depth, child_depth)
+        
+        return max_depth
+    
+    def _find_unused_nodes(self, document: mx.Document) -> List[mx.Node]:
+        """Find nodes that are not connected to any material output."""
+        try:
+            # Get all nodes
+            all_nodes = set(document.getNodes())
+            
+            # Find nodes connected to materials
+            connected_nodes = set()
+            materials = document.getMaterialNodes()
+            
+            for material in materials:
+                self._collect_connected_nodes(material, connected_nodes, document)
+            
+            # Return unused nodes
+            return list(all_nodes - connected_nodes)
+            
+        except Exception as e:
+            self.logger.error(f"Error finding unused nodes: {str(e)}")
+            return []
+    
+    def _collect_connected_nodes(self, element: mx.Element, connected_nodes: set, document: mx.Document):
+        """Collect all nodes connected to a given element."""
+        if element.isA(mx.Node):
+            connected_nodes.add(element)
+            
+            # Check inputs
+            for input_elem in element.getInputs():
+                if input_elem.isConnected():
+                    connected_node = input_elem.getConnectedNode()
+                    if connected_node and connected_node not in connected_nodes:
+                        self._collect_connected_nodes(connected_node, connected_nodes, document)
+    
+    def _apply_custom_validators(self, document: mx.Document, results: Dict[str, Any]):
+        """Apply custom validation rules."""
+        for validator_name, validator_func in self.custom_validators.items():
+            try:
+                validator_result = validator_func(document)
+                if not validator_result['valid']:
+                    results['errors'].extend(validator_result.get('errors', []))
+                    results['warnings'].extend(validator_result.get('warnings', []))
+            except Exception as e:
+                results['errors'].append(f"Custom validator '{validator_name}' failed: {str(e)}")
+    
+    def add_custom_validator(self, name: str, validator_func):
+        """Add a custom validation rule."""
+        self.custom_validators[name] = validator_func
+    
+    def get_validation_summary(self, results: Dict[str, Any]) -> str:
+        """Get a summary of validation results."""
+        summary = f"Validation {'PASSED' if results['valid'] else 'FAILED'}\n"
+        summary += f"Errors: {len(results['errors'])}\n"
+        summary += f"Warnings: {len(results['warnings'])}\n"
+        summary += f"Performance Issues: {len(results['performance_issues'])}\n"
+        summary += f"Suggestions: {len(results['suggestions'])}"
+        return summary
 
 
 class MaterialXDocumentManager:
@@ -48,6 +395,8 @@ class MaterialXDocumentManager:
     - Library loading and validation
     - Version compatibility
     - Search path management
+    - Advanced validation and error recovery
+    - Performance monitoring
     """
     
     def __init__(self, logger, version: str = "1.38"):
@@ -57,6 +406,15 @@ class MaterialXDocumentManager:
         self.libraries = None
         self.library_files = []
         self.search_path = None
+        
+        # Phase 3 enhancements
+        self.performance_monitor = MaterialXPerformanceMonitor(logger)
+        self.advanced_validator = MaterialXAdvancedValidator(logger)
+        
+        # Cache for performance optimization
+        self._node_def_cache = {}
+        self._input_def_cache = {}
+        self._output_def_cache = {}
         
     def load_libraries(self, custom_search_path: Optional[str] = None) -> bool:
         """
@@ -69,6 +427,8 @@ class MaterialXDocumentManager:
             bool: True if libraries loaded successfully
         """
         try:
+            self.performance_monitor.start_operation("load_libraries")
+            
             self.logger.info(f"Loading MaterialX libraries (version: {self.version})")
             
             # Create search path
@@ -93,20 +453,27 @@ class MaterialXDocumentManager:
             self.logger.info(f"Loaded {len(self.library_files)} library files")
             self.logger.info(f"Library files: {[f.asString() for f in self.library_files]}")
             
+            # Clear caches after library loading
+            self._clear_caches()
+            
+            self.performance_monitor.end_operation("load_libraries")
             return True
             
         except Exception as e:
             self.logger.error(f"Failed to load MaterialX libraries: {str(e)}")
+            self.performance_monitor.end_operation("load_libraries")
             return False
     
     def create_document(self) -> mx.Document:
         """
-        Create a new MaterialX document with loaded libraries.
+        Create a new MaterialX document with loaded libraries and validation.
         
         Returns:
             mx.Document: The created document
         """
         try:
+            self.performance_monitor.start_operation("create_document")
+            
             self.logger.info("Creating MaterialX document")
             
             # Create libraries document if not already created
@@ -119,16 +486,26 @@ class MaterialXDocumentManager:
             self.document = mx.createDocument()
             self.document.importLibrary(self.libraries)
             
+            # Validate document after creation
+            validation_results = self.advanced_validator.validate_document_comprehensive(self.document)
+            if not validation_results['valid']:
+                self.logger.warning("Document validation issues detected:")
+                for error in validation_results['errors']:
+                    self.logger.warning(f"  - {error}")
+            
             self.logger.info("MaterialX document created successfully")
+            
+            self.performance_monitor.end_operation("create_document")
             return self.document
             
         except Exception as e:
             self.logger.error(f"Failed to create MaterialX document: {str(e)}")
+            self.performance_monitor.end_operation("create_document")
             raise
     
     def get_node_definition(self, node_type: str, category: str = None) -> Optional[mx.NodeDef]:
         """
-        Get a node definition from the loaded libraries.
+        Get a node definition from the loaded libraries with caching.
         
         Args:
             node_type: The node type to find
@@ -141,19 +518,39 @@ class MaterialXDocumentManager:
             self.logger.error("No document available for node definition lookup")
             return None
         
+        # Create cache key
+        cache_key = f"{node_type}_{category or 'any'}"
+        
+        # Check cache first
+        if cache_key in self._node_def_cache:
+            return self._node_def_cache[cache_key]
+        
         try:
+            self.performance_monitor.start_operation("get_node_definition")
+            
             if category:
                 # Search by category and type
                 nodedefs = self.document.getMatchingNodeDefs(category)
                 for nodedef in nodedefs:
                     if nodedef.getType() == node_type:
-                        return nodedef
+                        result = nodedef
+                        break
+                else:
+                    result = None
             else:
                 # Search by name
-                return self.document.getNodeDef(node_type)
-                
+                result = self.document.getNodeDef(node_type)
+            
+            # Cache the result
+            if result is not None:
+                self._node_def_cache[cache_key] = result
+            
+            self.performance_monitor.end_operation("get_node_definition")
+            return result
+            
         except Exception as e:
             self.logger.error(f"Error looking up node definition {node_type}: {str(e)}")
+            self.performance_monitor.end_operation("get_node_definition")
             return None
     
     def get_input_definition(self, node_type: str, input_name: str, category: str = None) -> Optional[mx.Input]:
@@ -192,7 +589,7 @@ class MaterialXDocumentManager:
     
     def validate_document(self) -> bool:
         """
-        Validate the MaterialX document.
+        Validate the MaterialX document with comprehensive validation.
         
         Returns:
             bool: True if document is valid
@@ -201,16 +598,67 @@ class MaterialXDocumentManager:
             return False
         
         try:
-            # Basic validation - check for required elements
-            materials = self.document.getMaterialNodes()
-            if not materials:
-                self.logger.warning("No material nodes found in document")
+            self.performance_monitor.start_operation("validate_document")
             
-            return True
+            # Use advanced validator for comprehensive validation
+            validation_results = self.advanced_validator.validate_document_comprehensive(self.document)
+            
+            # Log validation summary
+            summary = self.advanced_validator.get_validation_summary(validation_results)
+            self.logger.info(f"Document validation: {summary}")
+            
+            # Log detailed results
+            if validation_results['errors']:
+                self.logger.error("Validation errors:")
+                for error in validation_results['errors']:
+                    self.logger.error(f"  - {error}")
+            
+            if validation_results['warnings']:
+                self.logger.warning("Validation warnings:")
+                for warning in validation_results['warnings']:
+                    self.logger.warning(f"  - {warning}")
+            
+            if validation_results['performance_issues']:
+                self.logger.warning("Performance issues:")
+                for issue in validation_results['performance_issues']:
+                    self.logger.warning(f"  - {issue}")
+            
+            if validation_results['suggestions']:
+                self.logger.info("Suggestions:")
+                for suggestion in validation_results['suggestions']:
+                    self.logger.info(f"  - {suggestion}")
+            
+            self.performance_monitor.end_operation("validate_document")
+            return validation_results['valid']
             
         except Exception as e:
             self.logger.error(f"Document validation failed: {str(e)}")
+            self.performance_monitor.end_operation("validate_document")
             return False
+    
+    def _clear_caches(self):
+        """Clear all caches to free memory."""
+        self._node_def_cache.clear()
+        self._input_def_cache.clear()
+        self._output_def_cache.clear()
+        gc.collect()
+    
+    def get_performance_stats(self) -> Dict[str, Any]:
+        """Get performance statistics."""
+        return {
+            'cache_sizes': {
+                'node_defs': len(self._node_def_cache),
+                'input_defs': len(self._input_def_cache),
+                'output_defs': len(self._output_def_cache)
+            },
+            'suggestions': self.performance_monitor.suggest_optimizations()
+        }
+    
+    def cleanup(self):
+        """Clean up resources and free memory."""
+        self._clear_caches()
+        self.performance_monitor.cleanup()
+        self.logger.info("MaterialXDocumentManager cleanup completed")
 
 
 class MaterialXTypeConverter:
@@ -786,7 +1234,7 @@ class MaterialXLibraryBuilder:
     Builds MaterialX documents using the MaterialX library.
     
     This is the main builder class that replaces the manual XML generation
-    with proper MaterialX library APIs.
+    with proper MaterialX library APIs and Phase 3 enhancements.
     """
     
     def __init__(self, material_name: str, logger, version: str = "1.38"):
@@ -811,6 +1259,18 @@ class MaterialXLibraryBuilder:
         self.nodes = {}  # For backward compatibility
         self.connections = []
         self.node_counter = 0
+        
+        # Phase 3 enhancements
+        self.performance_monitor = self.doc_manager.performance_monitor
+        self.advanced_validator = self.doc_manager.advanced_validator
+        
+        # Advanced file writing options
+        self.write_options = {
+            'skip_library_elements': True,
+            'write_xinclude': False,
+            'remove_layout': True,
+            'format_output': True
+        }
         
     def add_node(self, node_type: str, name: str, node_type_category: str = None, **params) -> str:
         """
@@ -984,22 +1444,44 @@ class MaterialXLibraryBuilder:
     
     def to_string(self) -> str:
         """
-        Convert the document to a formatted XML string.
+        Convert the document to a formatted XML string with advanced options.
         
         Returns:
             str: The formatted XML string
         """
         try:
-            # Use mtlxutils for writing
-            content = mxf.MtlxFile.writeDocumentToString(self.document)
+            self.performance_monitor.start_operation("to_string")
+            
+            # Apply advanced write options
+            if self.write_options['remove_layout']:
+                mxf.MtlxFile.removeLayout(self.document)
+            
+            # Use custom predicate for library elements
+            predicate = mxf.MtlxFile.skipLibraryElement if self.write_options['skip_library_elements'] else None
+            
+            # Use mtlxutils for writing with advanced options
+            content = mxf.MtlxFile.writeDocumentToString(self.document, predicate)
+            
+            # Format output if requested
+            if self.write_options['format_output']:
+                try:
+                    import xml.dom.minidom
+                    dom = xml.dom.minidom.parseString(content)
+                    content = dom.toprettyxml(indent="  ")
+                except Exception as format_error:
+                    self.logger.warning(f"Failed to format XML output: {str(format_error)}")
+            
+            self.performance_monitor.end_operation("to_string")
             return content
+            
         except Exception as e:
             self.logger.error(f"Failed to convert document to string: {str(e)}")
+            self.performance_monitor.end_operation("to_string")
             return ""
     
     def write_to_file(self, filepath: str) -> bool:
         """
-        Write the document to a file.
+        Write the document to a file with advanced options and validation.
         
         Args:
             filepath: The output file path
@@ -1008,19 +1490,113 @@ class MaterialXLibraryBuilder:
             bool: True if successful
         """
         try:
-            # Use mtlxutils for writing
-            mxf.MtlxFile.writeDocumentToFile(self.document, filepath)
-            self.logger.info(f"Successfully wrote MaterialX document to: {filepath}")
+            self.performance_monitor.start_operation("write_to_file")
+            
+            # Validate document before writing
+            validation_results = self.advanced_validator.validate_document_comprehensive(self.document)
+            if not validation_results['valid']:
+                self.logger.warning("Writing document with validation issues:")
+                for error in validation_results['errors']:
+                    self.logger.warning(f"  - {error}")
+            
+            # Apply advanced write options
+            if self.write_options['remove_layout']:
+                mxf.MtlxFile.removeLayout(self.document)
+            
+            # Use custom predicate for library elements
+            predicate = mxf.MtlxFile.skipLibraryElement if self.write_options['skip_library_elements'] else None
+            
+            # Use mtlxutils for writing with advanced options
+            mxf.MtlxFile.writeDocumentToFile(self.document, filepath, predicate)
+            
+            # Verify file was written successfully
+            if not os.path.exists(filepath):
+                raise RuntimeError(f"File was not created: {filepath}")
+            
+            file_size = os.path.getsize(filepath)
+            self.logger.info(f"Successfully wrote MaterialX document to: {filepath} ({file_size} bytes)")
+            
+            self.performance_monitor.end_operation("write_to_file")
             return True
+            
         except Exception as e:
             self.logger.error(f"Failed to write document to file: {str(e)}")
+            self.performance_monitor.end_operation("write_to_file")
             return False
     
     def validate(self) -> bool:
         """
-        Validate the MaterialX document.
+        Validate the MaterialX document with comprehensive validation.
         
         Returns:
             bool: True if document is valid
         """
-        return self.doc_manager.validate_document() 
+        return self.doc_manager.validate_document()
+    
+    def get_performance_stats(self) -> Dict[str, Any]:
+        """
+        Get comprehensive performance statistics.
+        
+        Returns:
+            Dict containing performance metrics
+        """
+        return self.doc_manager.get_performance_stats()
+    
+    def set_write_options(self, **options):
+        """
+        Set advanced file writing options.
+        
+        Args:
+            **options: Writing options to set
+        """
+        self.write_options.update(options)
+        self.logger.info(f"Updated write options: {self.write_options}")
+    
+    def optimize_document(self) -> bool:
+        """
+        Optimize the MaterialX document for better performance.
+        
+        Returns:
+            bool: True if optimization was successful
+        """
+        try:
+            self.performance_monitor.start_operation("optimize_document")
+            
+            self.logger.info("Optimizing MaterialX document...")
+            
+            # Remove unused nodes
+            unused_nodes = self.advanced_validator._find_unused_nodes(self.document)
+            if unused_nodes:
+                self.logger.info(f"Removing {len(unused_nodes)} unused nodes")
+                for node in unused_nodes:
+                    try:
+                        node.getParent().removeChild(node.getName())
+                    except Exception as e:
+                        self.logger.warning(f"Failed to remove unused node {node.getName()}: {str(e)}")
+            
+            # Clear caches to free memory
+            self.doc_manager._clear_caches()
+            
+            # Validate after optimization
+            validation_results = self.advanced_validator.validate_document_comprehensive(self.document)
+            if not validation_results['valid']:
+                self.logger.warning("Document has validation issues after optimization")
+            
+            self.logger.info("Document optimization completed")
+            
+            self.performance_monitor.end_operation("optimize_document")
+            return True
+            
+        except Exception as e:
+            self.logger.error(f"Document optimization failed: {str(e)}")
+            self.performance_monitor.end_operation("optimize_document")
+            return False
+    
+
+    
+    def cleanup(self):
+        """
+        Clean up resources and free memory.
+        """
+        self.doc_manager.cleanup()
+        self.logger.info("MaterialXLibraryBuilder cleanup completed") 

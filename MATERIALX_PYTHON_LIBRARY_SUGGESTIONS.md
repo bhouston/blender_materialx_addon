@@ -124,10 +124,10 @@ mx.writeToXmlFile(doc, filePath, writeOptions)
 
 ### Phase 4: Performance and Robustness 
 
-#### 5.1 Memory Management
+#### 4.1 Memory Management
 - Proper MaterialX document cleanup
 
-#### 5.2 Error Recovery
+#### 4.2 Error Recovery
 - Better error messages and debugging
 
 ## Implementation Plan

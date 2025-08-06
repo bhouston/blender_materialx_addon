@@ -23,6 +23,7 @@ Usage:
 import bpy
 import os
 import shutil
+import time
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple, Any, Union
 import math
@@ -763,13 +764,14 @@ class NodeMapper:
 
 
 class MaterialXExporter:
-    """Main MaterialX exporter class."""
+    """Main MaterialX exporter class with Phase 3 enhancements."""
     
     def __init__(self, material: bpy.types.Material, output_path: str, logger, options: Dict = None):
         self.material = material
         self.output_path = Path(output_path)
         self.options = options or {}
         self.logger = logger
+        
         # Default options
         self.active_uvmap = self.options.get('active_uvmap', 'UVMap')
         self.export_textures = self.options.get('export_textures', True)
@@ -779,33 +781,57 @@ class MaterialXExporter:
         self.copy_textures = self.options.get('copy_textures', True)
         self.relative_paths = True  # Always use relative paths for this workflow
         self.strict_mode = True  # Always strict mode
+        
+        # Phase 3 enhancements
+        self.optimize_document = self.options.get('optimize_document', True)
+        self.advanced_validation = self.options.get('advanced_validation', True)
+        self.performance_monitoring = self.options.get('performance_monitoring', True)
+        
         # Internal state
         self.exported_nodes = {}
         self.texture_paths = {}
         self.builder = None
         self.unsupported_nodes = []
         self.constant_manager = ConstantManager()
+        
+        # Performance tracking
+        self.export_start_time = None
+        self.export_end_time = None
 
     def export(self) -> dict:
-        """Export the material to MaterialX format. Returns a result dict."""
+        """Export the material to MaterialX format with Phase 3 enhancements. Returns a result dict."""
         result = {
             "success": False,
             "unsupported_nodes": [],
             "output_path": str(self.output_path),
             "error": None,
+            "performance_stats": {},
+            "validation_results": {},
+            "optimization_applied": False
         }
+        
         try:
+            # Start performance monitoring
+            if self.performance_monitoring:
+                self.export_start_time = time.time()
+                self.logger.info("Starting performance monitoring for export")
+            
             self.logger.info(f"Starting export of material '{self.material.name}'")
             self.logger.info(f"Output path: {self.output_path}")
             self.logger.info(f"Material uses nodes: {self.material.use_nodes}")
+            self.logger.info(f"Phase 3 features: optimize={self.optimize_document}, validation={self.advanced_validation}")
+            
             # Attach exporter to builder for relative path lookup
             MaterialXBuilder.exporter = self
+            
             if not self.material.use_nodes:
                 self.logger.info(f"Material '{self.material.name}' does not use nodes. Creating basic material.")
                 ok = self._export_basic_material()
                 result["success"] = ok
                 return result
+            
             self.constant_manager.reset() # Reset constant manager for each export
+            
             # Find the Principled BSDF node
             principled_node = self._find_principled_bsdf_node()
             if not principled_node:
@@ -815,18 +841,70 @@ class MaterialXExporter:
                     self.logger.info(f"  - {node.name}: {node.type}")
                 result["error"] = "No Principled BSDF node found"
                 return result
+            
             self.logger.info(f"Found Principled BSDF node: {principled_node.name}")
             self.builder = MaterialXBuilder(self.material.name, self.logger, self.materialx_version)
+            
             # Attach exporter to builder for relative path lookup
             self.builder.exporter = self
             self.logger.info(f"Created MaterialX builder with version {self.materialx_version}")
+            
+            # Configure Phase 3 features
+            if self.advanced_validation:
+                self.builder.set_write_options(
+                    skip_library_elements=True,
+                    write_xinclude=False,
+                    remove_layout=True,
+                    format_output=True
+                )
+            
             self.logger.info("Starting node network export...")
             surface_node_name = self._export_node_network(principled_node)
             self.logger.info(f"Node network export completed. Surface node: {surface_node_name}")
             self.builder.set_material_surface(surface_node_name)
+            
+            # Phase 3: Document optimization
+            if self.optimize_document:
+                self.logger.info("Applying document optimization...")
+                optimization_success = self.builder.optimize_document()
+                result["optimization_applied"] = optimization_success
+                if optimization_success:
+                    self.logger.info("Document optimization completed successfully")
+                else:
+                    self.logger.warning("Document optimization failed")
+            
+            # Phase 3: Advanced validation
+            if self.advanced_validation:
+                self.logger.info("Performing advanced validation...")
+                validation_success = self.builder.validate()
+                result["validation_results"] = {
+                    "valid": validation_success,
+                    "details": "See log for detailed validation results"
+                }
+                if not validation_success:
+                    self.logger.warning("Document validation failed")
+            
+
+            
+            # Write the file
             self._write_file()
+            
+            # Phase 3: Performance statistics
+            if self.performance_monitoring:
+                self.export_end_time = time.time()
+                export_duration = self.export_end_time - self.export_start_time
+                performance_stats = self.builder.get_performance_stats()
+                performance_stats['export_duration'] = export_duration
+                result["performance_stats"] = performance_stats
+                
+                self.logger.info(f"Export completed in {export_duration:.4f} seconds")
+                self.logger.info("Performance statistics:")
+                for key, value in performance_stats.items():
+                    self.logger.info(f"  {key}: {value}")
+            
             result["success"] = True
             result["unsupported_nodes"] = self.unsupported_nodes
+            
         except Exception as e:
             import traceback
             self.logger.error(f"ERROR: Failed to export material '{self.material.name}'")
@@ -838,6 +916,11 @@ class MaterialXExporter:
             result["unsupported_nodes"] = self.unsupported_nodes
             if self.strict_mode:
                 raise
+        finally:
+            # Phase 3: Cleanup
+            if self.builder:
+                self.builder.cleanup()
+        
         return result
     
     def _export_basic_material(self) -> bool:
@@ -971,7 +1054,7 @@ class MaterialXExporter:
         return node_name
     
     def _write_file(self):
-        """Write the MaterialX document to file."""
+        """Write the MaterialX document to file with Phase 3 enhancements."""
         try:
             self.logger.info(f"Ensuring output directory exists: {self.output_path.parent}")
             # Ensure output directory exists
@@ -979,10 +1062,12 @@ class MaterialXExporter:
             
             self.logger.info(f"Writing MaterialX content to: {self.output_path}")
             
-            # Use library-based writing
-            success = self.builder.library_builder.write_to_file(str(self.output_path))
+            # Use library-based writing with Phase 3 enhancements
+            success = self.builder.write_to_file(str(self.output_path))
             if success:
                 self.logger.info(f"Successfully wrote MaterialX document using library")
+                
+
             else:
                 self.logger.error("Failed to write document using library")
                 raise RuntimeError("Failed to write MaterialX document")
