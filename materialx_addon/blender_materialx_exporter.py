@@ -229,6 +229,9 @@ NODE_SCHEMAS = {
         {'blender': 'To Min', 'mtlx': 'outlow', 'type': 'color3', 'category': 'color3'},
         {'blender': 'To Max', 'mtlx': 'outhigh', 'type': 'color3', 'category': 'color3'},
     ],
+    'VALTORGB': [
+        {'blender': 'Fac', 'mtlx': 'in', 'type': 'float', 'category': 'color3'},
+    ],
 
     'TEX_MUSGRAVE': [
         {'blender': 'Vector', 'mtlx': 'texcoord', 'type': 'vector3', 'category': 'color3'},
@@ -1433,8 +1436,10 @@ class NodeMapper:
     
     @staticmethod
     def map_color_ramp(node, builder: MaterialXBuilder, input_nodes: Dict, input_nodes_by_index: Dict = None, blender_node=None, constant_manager=None, exported_nodes=None) -> str:
-        """Map ColorRamp node to MaterialX ramplr node."""
-        node_name = builder.add_node("ramplr", f"colorramp_{node.name}", "color3")
+        """Map ColorRamp node to MaterialX ramp4 node."""
+        # For now, create a simple ramp4 node without complex input mapping
+        # TODO: Implement proper Color Ramp to MaterialX mapping
+        node_name = builder.add_node("ramp4", f"colorramp_{node.name}", "color3")
         return node_name
     
     @staticmethod
