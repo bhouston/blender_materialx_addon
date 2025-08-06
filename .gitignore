@@ -4,3 +4,18 @@ io_scene_gltf2
 *.zip
 *.log
 MaterialX.v1.38.PBRSpec.pdf
+
+# Blender backup files
+*.blend1
+*.blend2
+*.blend3
+*.blend4
+*.blend5
+*.blend6
+*.blend7
+*.blend8
+*.blend9
+
+# Temporary files
+temp_*.blend
+examples/blender/*.blend
