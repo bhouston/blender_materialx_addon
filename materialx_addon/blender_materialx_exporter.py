@@ -29,29 +29,10 @@ from pathlib import Path
 from typing import Dict, List, Optional, Tuple, Any, Union
 import math
 
-# Import the new MaterialX library core
-try:
-    from . import materialx_library_core
-    from .materialx_library_core import MaterialXLibraryBuilder, MaterialXDocumentManager, MaterialXTypeConverter
-    print("MaterialX library core imported successfully")
-except ImportError as e:
-    print(f"Failed to import MaterialX library core: {e}")
-    # Fallback for direct import
-    import materialx_library_core
-    from materialx_library_core import MaterialXLibraryBuilder, MaterialXDocumentManager, MaterialXTypeConverter
-    print("MaterialX library core imported via fallback")
-
-# Import the MaterialX validator
-try:
-    from . import materialx_validator
-    from .materialx_validator import MaterialXValidator, validate_materialx_document, validate_materialx_file
-    print("MaterialX validator imported successfully")
-except ImportError as e:
-    print(f"Failed to import MaterialX validator: {e}")
-    # Fallback for direct import
-    import materialx_validator
-    from materialx_validator import MaterialXValidator, validate_materialx_document, validate_materialx_file
-    print("MaterialX validator imported via fallback")
+# Import the new modular structure
+from .node_definitions import CustomNodeDefinitionManager, get_custom_node_type, is_custom_node_type
+from .core import MaterialXLibraryBuilder, MaterialXDocumentManager, MaterialXTypeConverter
+from .validation import MaterialXValidator, validate_materialx_document, validate_materialx_file
 
 
 def get_input_value_or_connection(node, input_name, exported_nodes=None) -> Tuple[bool, Any, str]:
