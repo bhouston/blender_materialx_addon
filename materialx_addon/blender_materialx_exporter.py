@@ -653,6 +653,25 @@ NODE_MAPPING = {
             'Color': 'out',
         }
     },
+    'TEX_BRICK': {
+        'mtlx_type': 'brick_texture',
+        'mtlx_category': 'color3',
+        'inputs': {
+            'Vector': 'texcoord',
+            'Color1': 'color1',
+            'Color2': 'color2',
+            'Mortar': 'mortar',
+            'Scale': 'scale',
+            'Mortar Size': 'mortar_size',
+            'Bias': 'bias',
+            'Brick Width': 'brick_width',
+            'Row Height': 'row_height',
+        },
+        'outputs': {
+            'Color': 'out',
+            'Fac': 'out',
+        }
+    },
     # New utility nodes
     'NEW_GEOMETRY': {
         'mtlx_type': 'position',
@@ -1787,11 +1806,11 @@ class NodeMapper:
     def map_brick_texture_enhanced(node, builder: MaterialXBuilder, input_nodes: Dict, input_nodes_by_index: Dict = None, blender_node=None, constant_manager=None, exported_nodes=None) -> str:
         """Enhanced brick texture mapping using custom node system."""
         # Ensure custom node definition is available
-        if builder.library_builder.doc_manager.custom_node_manager is None:
-            builder.library_builder.doc_manager._initialize_custom_node_manager()
+        if builder.library_builder.document_manager.custom_node_manager is None:
+            builder.library_builder.document_manager._initialize_custom_node_manager()
         
         # Get the custom node manager
-        custom_node_manager = builder.library_builder.doc_manager.custom_node_manager
+        custom_node_manager = builder.library_builder.document_manager.custom_node_manager
         if not custom_node_manager:
             builder.logger.error("Custom node manager not available")
             return None

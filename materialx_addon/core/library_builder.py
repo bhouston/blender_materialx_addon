@@ -53,6 +53,9 @@ class MaterialXLibraryBuilder:
         self.connections = []
         self.node_counter = 0
         
+        # Node builder for creating inputs with proper type handling
+        self.node_builder = NodeBuilder(self.logger)
+        
         # Performance tracking removed
         
         # Initialize document
@@ -478,3 +481,158 @@ class MaterialXLibraryBuilder:
             
         except Exception as e:
             self.logger.error(f"Cleanup error: {str(e)}")
+
+
+class NodeBuilder:
+    """
+    Helper class for creating MaterialX node inputs with proper type handling.
+    """
+    
+    def __init__(self, logger):
+        self.logger = logger
+    
+    def create_mtlx_input(self, node, input_name: str, value=None, node_type: str = None, category: str = None):
+        """
+        Create a MaterialX input with proper type handling.
+        
+        Args:
+            node: The MaterialX node to add the input to
+            input_name: The input name
+            value: The input value
+            node_type: The node type for type inference
+            category: The node category for type inference
+        """
+        try:
+            # Determine input type
+            input_type = self._get_input_type(input_name, value, node_type, category)
+            
+            # Create input
+            input_elem = node.addInput(input_name, input_type)
+            
+            # Set value if provided
+            if value is not None:
+                if isinstance(value, (list, tuple)):
+                    input_elem.setValueString(",".join(str(v) for v in value))
+                else:
+                    input_elem.setValueString(str(value))
+            
+            self.logger.debug(f"Created input {input_name} of type {input_type} for node {node.getName()}")
+            return input_elem
+            
+        except Exception as e:
+            self.logger.error(f"Failed to create input {input_name}: {str(e)}")
+            raise
+    
+    def _get_input_type(self, input_name: str, value, node_type: str = None, category: str = None) -> str:
+        """
+        Determine the appropriate MaterialX type for an input.
+        
+        Args:
+            input_name: The input name
+            value: The input value
+            node_type: The node type
+            category: The node category
+            
+        Returns:
+            str: The MaterialX type string
+        """
+        # Type mapping based on input names
+        type_mapping = {
+            # Color inputs
+            'base_color': 'color3',
+            'basecolor': 'color3',
+            'color': 'color3',
+            'diffuse_color': 'color3',
+            'diffusecolor': 'color3',
+            'emission_color': 'color3',
+            'emissioncolor': 'color3',
+            'specular_color': 'color3',
+            'specularcolor': 'color3',
+            'subsurface_color': 'color3',
+            'subsurfacecolor': 'color3',
+            'transmission_color': 'color3',
+            'transmissioncolor': 'color3',
+            
+            # Vector inputs
+            'normal': 'vector3',
+            'tangent': 'vector3',
+            'position': 'vector3',
+            'vector': 'vector3',
+            'scale': 'vector3',
+            'offset': 'vector3',
+            'rotation': 'vector3',
+            
+            # Float inputs
+            'roughness': 'float',
+            'metallic': 'float',
+            'specular': 'float',
+            'specular_roughness': 'float',
+            'ior': 'float',
+            'transmission': 'float',
+            'transmission_roughness': 'float',
+            'subsurface': 'float',
+            'subsurface_radius': 'float',
+            'subsurface_scale': 'float',
+            'subsurface_anisotropy': 'float',
+            'anisotropic': 'float',
+            'anisotropic_rotation': 'float',
+            'anisotropic_tangent': 'float',
+            'sheen': 'float',
+            'sheen_roughness': 'float',
+            'sheen_color': 'color3',
+            'sheencolor': 'color3',
+            'clearcoat': 'float',
+            'clearcoat_roughness': 'float',
+            'clearcoat_ior': 'float',
+            'clearcoat_normal': 'vector3',
+            'clearcoat_normal_scale': 'float',
+            'clearcoat_tint': 'color3',
+            'clearcoat_tint_scale': 'float',
+            'emission_strength': 'float',
+            'emission_strength': 'float',
+            'alpha': 'float',
+            'coat': 'float',
+            'coat_roughness': 'float',
+            'coat_ior': 'float',
+            'coat_color': 'color3',
+            'coatcolor': 'color3',
+            'coat_normal': 'vector3',
+            'coat_normal_scale': 'float',
+            'coat_tint': 'color3',
+            'coat_tint_scale': 'float',
+            
+            # String inputs
+            'file': 'filename',
+            'filename': 'filename',
+            'colorspace': 'string',
+            'color_space': 'string',
+        }
+        
+        # Check if input name is in our mapping
+        if input_name.lower() in type_mapping:
+            return type_mapping[input_name.lower()]
+        
+        # Infer type from value
+        if value is not None:
+            if isinstance(value, (list, tuple)):
+                if len(value) == 2:
+                    return 'vector2'
+                elif len(value) == 3:
+                    # Check if it looks like a color (values between 0-1) or vector
+                    if all(0 <= v <= 1 for v in value):
+                        return 'color3'
+                    else:
+                        return 'vector3'
+                elif len(value) == 4:
+                    return 'color4'
+            elif isinstance(value, bool):
+                return 'boolean'
+            elif isinstance(value, int):
+                return 'integer'
+            elif isinstance(value, float):
+                return 'float'
+            elif isinstance(value, str):
+                return 'string'
+        
+        # Default to float for unknown types
+        return 'float'

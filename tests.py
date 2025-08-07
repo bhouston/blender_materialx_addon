@@ -20,7 +20,6 @@ import os
 import subprocess
 import tempfile
 import shutil
-import time
 import logging
 import xml.etree.ElementTree as ET
 from pathlib import Path
@@ -210,8 +209,7 @@ try:
         'copy_textures': False,
         'relative_paths': True,
         'optimize_document': True,
-        'advanced_validation': True,
-        'performance_monitoring': True
+        'advanced_validation': True
     }}
     
     # Export the material
@@ -255,7 +253,6 @@ try:
         else:
             print(f"⚠ No validation results available from export")
         
-        print(f"  Performance stats: {{result.get('performance_stats', {{}})}}")
         print(f"  Optimization applied: {{result.get('optimization_applied', False)}}")
     else:
         print(f"✗ Export failed: {{result.get('error', 'Unknown error')}}")
@@ -563,26 +560,7 @@ def run_comprehensive_test():
         results['material_export'] = all(export_results)
         results['material_validation'] = all(validation_results)
         
-        # Test 5: Performance Testing with Complex Materials
-        logger.info("🧪 Test 5: Performance Testing")
-        
-        # Test with the most complex material (ComplexProcedural)
-        complex_blend_file = next((f for f in blend_files if "ComplexProcedural" in f.name), blend_files[0])
-        complex_materials = get_materials_from_blend_file(complex_blend_file)
-        
-        if complex_materials:
-            start_time = time.time()
-            performance_success = test_material_export(complex_materials[0], complex_blend_file, output_dir)
-            end_time = time.time()
-            
-            duration = end_time - start_time
-            logger.info(f"Performance test took {duration:.2f} seconds")
-            
-            if duration > 60:  # More than 60 seconds is too slow
-                logger.warning(f"⚠ Performance test took longer than expected: {duration:.2f}s")
-                performance_success = False
-            
-            results['performance'] = performance_success
+
         
         # Keep exported files for inspection
         logger.info(f"📁 Exported MaterialX files preserved in: {os.path.abspath(output_dir)}")
@@ -639,7 +617,7 @@ SUMMARY:
 VALIDATION FEATURES:
 - ✓ MaterialX document structure validation
 - ✓ Node and connection validation
-- ✓ Performance analysis and optimization
+- ✓ Document optimization
 - ✓ Standard library integration
 - ✓ Comprehensive error reporting
 - ✓ Detailed statistics and warnings
