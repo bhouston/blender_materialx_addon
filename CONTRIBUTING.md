@@ -47,7 +47,6 @@ This comprehensive test script:
 - ✅ Tests UI functionality (export buttons, configuration)
 - ✅ Validates exported MaterialX files
 - ✅ Tests error conditions and edge cases
-- ✅ Performs performance testing with complex materials
 - ✅ Provides detailed test reports and validation
 
 ### Test Material Creation
@@ -171,7 +170,6 @@ The addon provides specific error types with user-friendly messages:
 - **Validation Error**: MaterialX document validation issues
 - **File Write**: File system or permission issues
 - **Type Conversion**: Data type conversion failures
-- **Performance Warning**: Performance optimization suggestions
 - **Memory Error**: Resource management issues
 
 ### Helpful Error Messages

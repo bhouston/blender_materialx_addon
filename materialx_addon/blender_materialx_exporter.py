@@ -31,8 +31,14 @@ import math
 
 # Import the new modular structure
 from .node_definitions import CustomNodeDefinitionManager, get_custom_node_type, is_custom_node_type
-from .core import MaterialXLibraryBuilder, MaterialXDocumentManager, MaterialXTypeConverter
-from .validation import MaterialXValidator, validate_materialx_document, validate_materialx_file
+from .core import (
+    MaterialXLibraryBuilder, 
+    MaterialXDocumentManager, 
+    MaterialXTypeConverter,
+    MaterialXValidator, 
+    validate_materialx_document, 
+    validate_materialx_file
+)
 
 
 def get_input_value_or_connection(node, input_name, exported_nodes=None) -> Tuple[bool, Any, str]:

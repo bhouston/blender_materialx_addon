@@ -23,7 +23,7 @@ class TextureDefinitionManager:
         self.logger.info("=== TEXTURE DEFINITIONS: Adding brick texture definition ===")
         
         # Check if already exists
-        existing_nodedef, existing_impl = self._check_existing_definition("brick_texture", "color3")
+        existing_nodedef, existing_impl = self._check_existing_definition("brick_texture", "")
         if existing_nodedef and existing_impl:
             self.texture_defs["brick_texture"] = {
                 "nodedef": existing_nodedef,
@@ -35,30 +35,36 @@ class TextureDefinitionManager:
             return
         
         # Node Definition
-        nodedef = self.document.addNodeDef("ND_brick_texture_color3", "color3", "brick_texture")
-        nodedef.setNodeGroup("texture")
+        nodedef = self.document.addNodeDef("ND_brick_texture", "color3", "brick_texture")
+        nodedef.setNodeGroup("texture2d")
         nodedef.setAttribute("version", "1.0")
-        nodedef.setAttribute("description", "Brick texture pattern")
+        nodedef.setAttribute("description", "Brick texture node for Blender compatibility")
         
         # Inputs
-        texcoord_input = nodedef.addInput("texcoord", "vector2")
-        texcoord_input.setAttribute("description", "Texture coordinates")
+        inputs = [
+            ("texcoord", "vector2", "0,0", "Texture coordinates"),
+            ("color1", "color3", "0.8,0.8,0.8", "First brick color"),
+            ("color2", "color3", "0.2,0.2,0.2", "Second brick color"),
+            ("mortar", "color3", "0.2,0.2,0.2", "Mortar color"),
+            ("scale", "float", "5.0", "Scale of the brick pattern"),
+            ("mortar_size", "float", "0.02", "Size of mortar lines"),
+            ("bias", "float", "0.0", "Bias for brick offset"),
+            ("brick_width", "float", "0.5", "Width of bricks (0-1)"),
+            ("row_height", "float", "0.25", "Height of brick rows (0-1)")
+        ]
         
-        color1_input = nodedef.addInput("color1", "color3")
-        color1_input.setAttribute("description", "First brick color")
-        color1_input.setValueString("0.8,0.2,0.2")
+        for name, type_str, default_value, description in inputs:
+            input_elem = nodedef.addInput(name, type_str)
+            input_elem.setValueString(default_value)
+            input_elem.setAttribute("description", description)
         
-        color2_input = nodedef.addInput("color2", "color3")
-        color2_input.setAttribute("description", "Second brick color")
-        color2_input.setValueString("0.2,0.2,0.8")
-        
-        mortar_input = nodedef.addInput("mortar", "color3")
-        mortar_input.setAttribute("description", "Mortar color")
-        mortar_input.setValueString("0.5,0.5,0.5")
-        
-        # Output
-        output = nodedef.addOutput("out", "color3")
-        output.setAttribute("description", "Brick texture output")
+        # Output - check if it already exists
+        existing_output = nodedef.getOutput("out")
+        if existing_output is None:
+            output = nodedef.addOutput("out", "color3")
+            output.setAttribute("description", "Brick texture output")
+        else:
+            self.logger.info("Brick texture output already exists, skipping creation")
         
         # Implementation NodeGraph
         impl = self.document.addNodeGraph("IM_brick_texture")
@@ -83,7 +89,7 @@ class TextureDefinitionManager:
         self.logger.info("=== TEXTURE DEFINITIONS: Adding voronoi texture definition ===")
         
         # Check if already exists
-        existing_nodedef, existing_impl = self._check_existing_definition("voronoi", "color3")
+        existing_nodedef, existing_impl = self._check_existing_definition("voronoi", "")
         if existing_nodedef and existing_impl:
             self.texture_defs["voronoi"] = {
                 "nodedef": existing_nodedef,
@@ -95,7 +101,7 @@ class TextureDefinitionManager:
             return
         
         # Node Definition
-        nodedef = self.document.addNodeDef("ND_voronoi_color3", "color3", "voronoi")
+        nodedef = self.document.addNodeDef("ND_voronoi", "color3", "voronoi")
         nodedef.setNodeGroup("texture")
         nodedef.setAttribute("version", "1.0")
         nodedef.setAttribute("description", "Voronoi texture pattern")
@@ -104,9 +110,13 @@ class TextureDefinitionManager:
         input_elem = nodedef.addInput("position", "vector2")
         input_elem.setAttribute("description", "Texture coordinates")
         
-        # Output
-        output = nodedef.addOutput("out", "color3")
-        output.setAttribute("description", "Voronoi texture output")
+        # Output - check if it already exists
+        existing_output = nodedef.getOutput("out")
+        if existing_output is None:
+            output = nodedef.addOutput("out", "color3")
+            output.setAttribute("description", "Voronoi texture output")
+        else:
+            self.logger.info("Voronoi texture output already exists, skipping creation")
         
         # Implementation NodeGraph
         impl = self.document.addNodeGraph("IM_voronoi_color3")
@@ -128,7 +138,10 @@ class TextureDefinitionManager:
     
     def _check_existing_definition(self, base_name: str, node_type: str) -> tuple[Optional[mx.NodeDef], Optional[mx.NodeGraph]]:
         """Check if a node definition already exists."""
-        nodedef_name = f"ND_{base_name}_{node_type}"
+        if node_type:
+            nodedef_name = f"ND_{base_name}_{node_type}"
+        else:
+            nodedef_name = f"ND_{base_name}"
         impl_name = f"IM_{base_name}"
         
         existing_nodedef = self.document.getNodeDef(nodedef_name)

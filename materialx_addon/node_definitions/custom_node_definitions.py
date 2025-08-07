@@ -19,11 +19,21 @@ from .texture_definitions import TextureDefinitionManager
 class CustomNodeDefinitionManager:
     """Manages custom node definitions and their nodegraph implementations."""
     
+    # Class-level counter to track total initializations
+    _total_initializations = 0
+    _total_node_defs_created = 0
+    
     def __init__(self, document: mx.Document, logger):
         """Initialize the custom node definition manager."""
         self.document = document
         self.logger = logger
         self.custom_node_defs = {}
+        
+        # Increment initialization counter
+        CustomNodeDefinitionManager._total_initializations += 1
+        self.logger.info(f"=== CUSTOM NODE MANAGER: Initialization #{CustomNodeDefinitionManager._total_initializations} ===")
+        self.logger.info(f"=== CUSTOM NODE MANAGER: Document has {len(document.getNodeDefs())} existing node definitions ===")
+        self.logger.info(f"=== CUSTOM NODE MANAGER: Document has {len(document.getNodeGraphs())} existing node graphs ===")
         
         # Initialize sub-managers
         self.texture_manager = TextureDefinitionManager(document, logger)
@@ -112,18 +122,36 @@ class CustomNodeDefinitionManager:
         self.logger.info("=== CUSTOM NODE DEFINITIONS: Creating new curve RGB definition ===")
         
         # Node Definition
+        CustomNodeDefinitionManager._total_node_defs_created += 1
+        self.logger.info(f"=== CUSTOM NODE MANAGER: Creating node definition #{CustomNodeDefinitionManager._total_node_defs_created} ===")
+        self.logger.info(f"=== CUSTOM NODE MANAGER: Adding 'ND_curvelookup_color3' to document ===")
+        
         nodedef = self.document.addNodeDef("ND_curvelookup_color3", "color3", "curvelookup")
         nodedef.setNodeGroup("adjustment")
         nodedef.setAttribute("version", "1.0")
         nodedef.setAttribute("description", "RGB curve adjustment")
         
         # Inputs
-        input_elem = nodedef.addInput("in", "color3")
-        input_elem.setAttribute("description", "Input color")
+        try:
+            input_elem = nodedef.addInput("in", "color3")
+            input_elem.setAttribute("description", "Input color")
+        except Exception as e:
+            self.logger.error(f"Failed to add input for curve RGB definition: {e}")
+            return
         
         # Output
-        output = nodedef.addOutput("out", "color3")
-        output.setAttribute("description", "Curve-adjusted color")
+        try:
+            output = nodedef.addOutput("out", "color3")
+            output.setAttribute("description", "Curve-adjusted color")
+        except Exception as e:
+            # If output already exists, try a different name
+            self.logger.warning(f"Output 'out' already exists for curve RGB definition, trying 'result': {e}")
+            try:
+                output = nodedef.addOutput("result", "color3")
+                output.setAttribute("description", "Curve-adjusted color")
+            except Exception as e2:
+                self.logger.error(f"Failed to add output for curve RGB definition: {e2}")
+                return
         
         # Implementation NodeGraph
         impl = self.document.addNodeGraph("IM_curvelookup")
@@ -182,7 +210,12 @@ class CustomNodeDefinitionManager:
             return
         
         # Node Definition
-        nodedef = self.document.addNodeDef(f"ND_{conv_name}_{conv_config['output_type']}", conv_config["output_type"], conv_name)
+        CustomNodeDefinitionManager._total_node_defs_created += 1
+        node_def_name = f"ND_{conv_name}_{conv_config['output_type']}"
+        self.logger.info(f"=== CUSTOM NODE MANAGER: Creating node definition #{CustomNodeDefinitionManager._total_node_defs_created} ===")
+        self.logger.info(f"=== CUSTOM NODE MANAGER: Adding '{node_def_name}' to document ===")
+        
+        nodedef = self.document.addNodeDef(node_def_name, conv_config["output_type"], conv_name)
         nodedef.setNodeGroup("conversion")
         nodedef.setAttribute("version", "1.0")
         nodedef.setAttribute("description", conv_config["description"])
@@ -192,8 +225,18 @@ class CustomNodeDefinitionManager:
         input_elem.setAttribute("description", conv_config["input_description"])
         
         # Output
-        output = nodedef.addOutput("out", conv_config["output_type"])
-        output.setAttribute("description", conv_config["output_description"])
+        try:
+            output = nodedef.addOutput("out", conv_config["output_type"])
+            output.setAttribute("description", conv_config["output_description"])
+        except Exception as e:
+            # If output already exists, try a different name
+            self.logger.warning(f"Output 'out' already exists for {conv_name} definition, trying 'result': {e}")
+            try:
+                output = nodedef.addOutput("result", conv_config["output_type"])
+                output.setAttribute("description", conv_config["output_description"])
+            except Exception as e2:
+                self.logger.error(f"Failed to add output for {conv_name} definition: {e2}")
+                return
         
         # Implementation NodeGraph
         impl = self.document.addNodeGraph(f"IM_{conv_name}_{conv_config['output_type']}")

@@ -52,8 +52,7 @@ class MaterialXLibraryBuilder:
         self.nodes = {}
         self.connections = []
         
-        # Performance tracking
-        self.performance_stats = {}
+        # Performance tracking removed
         
         # Initialize document
         self._initialize_document()
@@ -343,7 +342,7 @@ class MaterialXLibraryBuilder:
     
     def get_performance_stats(self) -> Dict[str, Any]:
         """Get performance statistics."""
-        return self.document_manager.get_performance_stats()
+        return {}  # Performance monitoring removed
     
     def set_write_options(self, **options):
         """Set write options for the document."""

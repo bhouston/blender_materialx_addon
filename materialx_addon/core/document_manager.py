@@ -34,7 +34,6 @@ class MaterialXDocumentManager:
         self.search_path = None
         
         # Phase 3 enhancements
-        self.performance_monitor = MaterialXPerformanceMonitor(logger)
         self.advanced_validator = MaterialXAdvancedValidator(logger)
         
         # Cache for performance optimization
@@ -44,6 +43,8 @@ class MaterialXDocumentManager:
         
         # Custom node definitions manager
         self.custom_node_manager = None
+        
+        self.logger.info(f"=== DOCUMENT MANAGER: Created new instance (version: {version}) ===")
         
     def load_libraries(self, custom_search_path: Optional[str] = None) -> bool:
         """
@@ -56,8 +57,6 @@ class MaterialXDocumentManager:
             bool: True if libraries loaded successfully
         """
         try:
-            self.performance_monitor.start_operation("load_libraries")
-            
             self.logger.info(f"Loading MaterialX libraries (version: {self.version})")
             
             # Create libraries document if not already created
@@ -75,12 +74,10 @@ class MaterialXDocumentManager:
             # Clear caches after library loading
             self._clear_caches()
             
-            self.performance_monitor.end_operation("load_libraries")
             return True
             
         except Exception as e:
             self.logger.error(f"Failed to load MaterialX libraries: {str(e)}")
-            self.performance_monitor.end_operation("load_libraries")
             return False
     
     def create_document(self) -> mx.Document:
@@ -91,8 +88,6 @@ class MaterialXDocumentManager:
             mx.Document: The created document
         """
         try:
-            self.performance_monitor.start_operation("create_document")
-            
             self.logger.info("Creating MaterialX document")
             
             # Create libraries document if not already created
@@ -114,12 +109,10 @@ class MaterialXDocumentManager:
             # Initialize custom node definitions manager (lazy initialization)
             self._initialize_custom_node_manager()
             
-            self.performance_monitor.end_operation("create_document")
             return self.document
             
         except Exception as e:
             self.logger.error(f"Failed to create MaterialX document: {str(e)}")
-            self.performance_monitor.end_operation("create_document")
             raise
     
     def get_node_definition(self, node_type: str, category: str = None) -> Optional[mx.NodeDef]:
@@ -238,8 +231,6 @@ class MaterialXDocumentManager:
             return False
         
         try:
-            self.performance_monitor.start_operation("validate_document")
-            
             # Basic validation
             valid, message = self.document.validate()
             if not valid:
@@ -254,12 +245,10 @@ class MaterialXDocumentManager:
                 return False
             
             self.logger.info("Document validation passed")
-            self.performance_monitor.end_operation("validate_document")
             return True
             
         except Exception as e:
             self.logger.error(f"Error during document validation: {str(e)}")
-            self.performance_monitor.end_operation("validate_document")
             return False
     
     def _clear_caches(self):
@@ -270,12 +259,17 @@ class MaterialXDocumentManager:
     
     def get_performance_stats(self) -> Dict[str, Any]:
         """Get performance statistics."""
-        return self.performance_monitor.get_stats()
+        return {}  # Performance monitoring removed
     
     def _initialize_custom_node_manager(self):
         """Initialize the custom node manager if not already done."""
         if self.custom_node_manager is None and self.document:
+            self.logger.info(f"=== DOCUMENT MANAGER: Initializing custom node manager ===")
+            self.logger.info(f"=== DOCUMENT MANAGER: Document has {len(self.document.getNodeDefs())} node definitions before custom manager init ===")
             self.custom_node_manager = CustomNodeDefinitionManager(self.document, self.logger)
+            self.logger.info(f"=== DOCUMENT MANAGER: Document has {len(self.document.getNodeDefs())} node definitions after custom manager init ===")
+        else:
+            self.logger.info(f"=== DOCUMENT MANAGER: Custom node manager already initialized or no document ===")
     
     def _is_custom_node_type(self, node_type: str) -> bool:
         """Check if a node type is a custom type."""
@@ -284,7 +278,6 @@ class MaterialXDocumentManager:
     
     def cleanup(self):
         """Clean up resources."""
-        self.performance_monitor.cleanup()
         self._clear_caches()
         self.document = None
         self.libraries = None

@@ -191,7 +191,7 @@ class MaterialXValidator:
                 })
         return analyzed
     
-    def _analyze_nodedef(self, nodedef: mx.NodeDef, resolve: bool) -> Dict:
+    def _analyze_nodedef(self, nodedef, resolve: bool) -> Dict:
         """Analyze a node definition."""
         return {
             'name': nodedef.getName(),
@@ -204,7 +204,7 @@ class MaterialXValidator:
             'inheritance': self._get_converted_value(nodedef) if resolve else nodedef.getInheritString()
         }
     
-    def _analyze_implementation(self, impl: mx.Implementation) -> Dict:
+    def _analyze_implementation(self, impl) -> Dict:
         """Analyze an implementation."""
         return {
             'name': impl.getName(),
@@ -213,7 +213,7 @@ class MaterialXValidator:
             'language': impl.getLanguage()
         }
     
-    def _analyze_nodegraph(self, nodegraph: mx.NodeGraph, resolve: bool) -> Dict:
+    def _analyze_nodegraph(self, nodegraph, resolve: bool) -> Dict:
         """Analyze a nodegraph."""
         return {
             'name': nodegraph.getName(),
@@ -224,7 +224,7 @@ class MaterialXValidator:
             'inheritance': self._get_converted_value(nodegraph) if resolve else nodegraph.getInheritString()
         }
     
-    def _analyze_material_node(self, material: mx.Node, resolve: bool) -> Dict:
+    def _analyze_material_node(self, material, resolve: bool) -> Dict:
         """Analyze a material node."""
         return {
             'name': material.getName(),
@@ -234,7 +234,7 @@ class MaterialXValidator:
             'inheritance': self._get_converted_value(material) if resolve else material.getInheritString()
         }
     
-    def _analyze_shader_bindings(self, shader: mx.ShaderRef) -> List[Dict]:
+    def _analyze_shader_bindings(self, shader) -> List[Dict]:
         """Analyze shader bindings."""
         bindings = []
         for binding in shader.getBindInputs():
@@ -246,54 +246,72 @@ class MaterialXValidator:
             })
         return bindings
     
-    def _analyze_geominfo(self, geominfo: mx.GeomInfo) -> Dict:
+    def _analyze_geominfo(self, geominfo) -> Dict:
         """Analyze geometry info."""
-        return {
-            'name': geominfo.getName(),
-            'type': geominfo.getType(),
-            'geom': self._get_geom_info(geominfo, False),
-            'value': geominfo.getValueString()
-        }
+        try:
+            return {
+                'name': geominfo.getName(),
+                'type': geominfo.getType(),
+                'geom': self._get_geom_info(geominfo, False),
+                'value': geominfo.getValueString()
+            }
+        except:
+            return {'name': 'unknown', 'type': 'unknown', 'error': 'Failed to analyze GeomInfo'}
     
-    def _analyze_variantset(self, variantset: mx.VariantSet) -> Dict:
+    def _analyze_variantset(self, variantset) -> Dict:
         """Analyze a variant set."""
-        return {
-            'name': variantset.getName(),
-            'variants': [var.getName() for var in variantset.getVariants()]
-        }
+        try:
+            return {
+                'name': variantset.getName(),
+                'variants': [var.getName() for var in variantset.getVariants()]
+            }
+        except:
+            return {'name': 'unknown', 'error': 'Failed to analyze VariantSet'}
     
-    def _analyze_propertyset(self, propertyset: mx.PropertySet) -> Dict:
+    def _analyze_propertyset(self, propertyset) -> Dict:
         """Analyze a property set."""
-        return {
-            'name': propertyset.getName(),
-            'properties': [{'name': prop.getName(), 'type': prop.getType(), 'value': prop.getValueString()} 
-                          for prop in propertyset.getProperties()]
-        }
+        try:
+            return {
+                'name': propertyset.getName(),
+                'properties': [{'name': prop.getName(), 'type': prop.getType(), 'value': prop.getValueString()} 
+                              for prop in propertyset.getProperties()]
+            }
+        except:
+            return {'name': 'unknown', 'error': 'Failed to analyze PropertySet'}
     
-    def _analyze_lookgroup(self, lookgroup: mx.LookGroup) -> Dict:
+    def _analyze_lookgroup(self, lookgroup) -> Dict:
         """Analyze a look group."""
-        return {
-            'name': lookgroup.getName(),
-            'looks': [look.getName() for look in lookgroup.getLooks()]
-        }
+        try:
+            return {
+                'name': lookgroup.getName(),
+                'looks': [look.getName() for look in lookgroup.getLooks()]
+            }
+        except:
+            return {'name': 'unknown', 'error': 'Failed to analyze LookGroup'}
     
-    def _analyze_look(self, look: mx.Look, resolve: bool) -> Dict:
+    def _analyze_look(self, look, resolve: bool) -> Dict:
         """Analyze a look."""
-        return {
-            'name': look.getName(),
-            'type': look.getType(),
-            'materials': [mat.getName() for mat in look.getMaterialAssigns()],
-            'properties': [prop.getName() for prop in look.getPropertyAssigns()],
-            'inheritance': self._get_converted_value(look) if resolve else look.getInheritString()
-        }
+        try:
+            return {
+                'name': look.getName(),
+                'type': look.getType(),
+                'materials': [mat.getName() for mat in look.getMaterialAssigns()],
+                'properties': [prop.getName() for prop in look.getPropertyAssigns()],
+                'inheritance': self._get_converted_value(look) if resolve else look.getInheritString()
+            }
+        except:
+            return {'name': 'unknown', 'error': 'Failed to analyze Look'}
     
-    def _analyze_backdrop(self, backdrop: mx.Backdrop) -> Dict:
+    def _analyze_backdrop(self, backdrop) -> Dict:
         """Analyze a backdrop."""
-        return {
-            'name': backdrop.getName(),
-            'width': backdrop.getWidth(),
-            'height': backdrop.getHeight()
-        }
+        try:
+            return {
+                'name': backdrop.getName(),
+                'width': backdrop.getWidth(),
+                'height': backdrop.getHeight()
+            }
+        except:
+            return {'name': 'unknown', 'error': 'Failed to analyze Backdrop'}
     
     def _get_converted_value(self, elem) -> str:
         """Get converted value for an element."""

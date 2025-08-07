@@ -10,7 +10,6 @@ A professional-grade Blender addon to export Blender materials to MaterialX (.mt
 - **Command-Line Export**: Export materials from any `.blend` file without opening Blender
 - **Texture Export**: Export and copy textures with relative/absolute path support
 - **Advanced Validation**: Built-in MaterialX document validation with detailed error reporting
-- **Performance Monitoring**: Real-time performance tracking and optimization
 - **Configuration Panel**: In-UI configuration for export settings
 
 ![Blender UI](BlenderScreenshot.png)
