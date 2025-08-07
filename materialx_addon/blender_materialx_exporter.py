@@ -1798,13 +1798,25 @@ class NodeMapper:
 
     @staticmethod
     def map_brick_texture_enhanced(node, builder: MaterialXBuilder, input_nodes: Dict, input_nodes_by_index: Dict = None, blender_node=None, constant_manager=None, exported_nodes=None) -> str:
-        """Enhanced brick texture mapping with type-safe input creation."""
+        """Enhanced brick texture mapping using custom node system."""
         # Ensure custom node definition is available
         if builder.library_builder.doc_manager.custom_node_manager is None:
             builder.library_builder.doc_manager._initialize_custom_node_manager()
         
+        # Get the custom node manager
+        custom_node_manager = builder.library_builder.doc_manager.custom_node_manager
+        if not custom_node_manager:
+            builder.logger.error("Custom node manager not available")
+            return None
+        
         # Create the brick texture node using our custom definition
-        node_name = builder.add_node('brick_texture', f"brick_{node.name}", 'texture2d')
+        custom_node = custom_node_manager.add_custom_node_to_document('brick_texture', f"brick_{node.name}", builder.library_builder.document)
+        if not custom_node:
+            builder.logger.error(f"Failed to create brick texture node: {node.name}")
+            # Fallback to standard node creation
+            node_name = builder.add_node('brick_texture', f"brick_{node.name}", 'texture2d')
+        else:
+            node_name = custom_node.getName()
         
         # Map inputs
         input_mapping = {

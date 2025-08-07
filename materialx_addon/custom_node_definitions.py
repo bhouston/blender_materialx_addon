@@ -66,13 +66,9 @@ class CustomNodeDefinitionManager:
             input_elem.setValueString(default_value)
             input_elem.setAttribute("description", description)
         
-        # Output - check if it already exists to avoid conflicts
-        existing_output = brick_nodedef.getOutput("out")
-        if existing_output is None:
-            output = brick_nodedef.addOutput("out", "color3")
-            output.setAttribute("description", "Brick texture output")
-        else:
-            self.logger.info("Brick texture output already exists, skipping creation")
+        # Output
+        output = brick_nodedef.addOutput("out", "color3")
+        output.setAttribute("description", "Brick texture output")
         
         # Implementation NodeGraph
         brick_impl = self.document.addNodeGraph("IM_brick_texture")
@@ -751,7 +747,7 @@ class CustomNodeDefinitionManager:
         # Set up connections
         # Scale texture coordinates
         scale_node.addInput("in1", "vector2").setNodeName("texcoord")
-        scale_node.addInput("in2", "vector2").setValue(mx.Vector2(5.0, 5.0))
+        scale_node.addInput("in2", "vector2").setValueString("5.0,5.0")
         
         # Extract X and Y components
         x_extract.addInput("in", "vector2").setNodeName("scale_texcoord")
@@ -759,27 +755,27 @@ class CustomNodeDefinitionManager:
         
         # X modulo
         x_mod_node.addInput("in1", "float").setNodeName("x_extract")
-        x_mod_node.addInput("in2", "float").setValue(1.0)
+        x_mod_node.addInput("in2", "float").setValueString("1.0")
         
         # Y modulo
         y_mod_node.addInput("in1", "float").setNodeName("y_extract")
-        y_mod_node.addInput("in2", "float").setValue(1.0)
+        y_mod_node.addInput("in2", "float").setValueString("1.0")
         
         # Brick offset
         offset_node.addInput("in1", "float").setNodeName("y_modulo")
-        offset_node.addInput("in2", "float").setValue(0.5)
+        offset_node.addInput("in2", "float").setValueString("0.5")
         
         # Mortar mask X
         mortar_x_node.addInput("in1", "float").setNodeName("x_modulo")
-        mortar_x_node.addInput("in2", "float").setValue(0.02)
-        mortar_x_node.addInput("value1", "float").setValue(1.0)
-        mortar_x_node.addInput("value2", "float").setValue(0.0)
+        mortar_x_node.addInput("in2", "float").setValueString("0.02")
+        mortar_x_node.addInput("value1", "float").setValueString("1.0")
+        mortar_x_node.addInput("value2", "float").setValueString("0.0")
         
         # Mortar mask Y
         mortar_y_node.addInput("in1", "float").setNodeName("y_modulo")
-        mortar_y_node.addInput("in2", "float").setValue(0.02)
-        mortar_y_node.addInput("value1", "float").setValue(1.0)
-        mortar_y_node.addInput("value2", "float").setValue(0.0)
+        mortar_y_node.addInput("in2", "float").setValueString("0.02")
+        mortar_y_node.addInput("value1", "float").setValueString("1.0")
+        mortar_y_node.addInput("value2", "float").setValueString("0.0")
         
         # Combine mortar masks
         mortar_combine.addInput("in1", "float").setNodeName("mortar_mask_x")
@@ -787,7 +783,7 @@ class CustomNodeDefinitionManager:
         
         # Select brick color
         color_select.addInput("in1", "float").setNodeName("x_modulo")
-        color_select.addInput("in2", "float").setValue(0.5)
+        color_select.addInput("in2", "float").setValueString("0.5")
         color_select.addInput("value1", "color3").setNodeName("color1")
         color_select.addInput("value2", "color3").setNodeName("color2")
         
