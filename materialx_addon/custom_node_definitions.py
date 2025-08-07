@@ -20,13 +20,74 @@ class CustomNodeDefinitionManager:
         self.document = document
         self.logger = logger
         self.custom_node_defs = {}
+        self.skip_definition_creation = False
         self._initialize_custom_definitions()
     
     def _initialize_custom_definitions(self):
         """Initialize all custom node definitions."""
+        if self.skip_definition_creation:
+            self.logger.info("Skipping custom definition creation - using existing definitions")
+            # Just populate the custom_node_defs with existing definitions
+            self._populate_existing_definitions()
+            return
+            
         self._add_brick_texture_definition()
         self._add_curve_rgb_definition()
         self._add_type_conversion_definitions()
+    
+    def _populate_existing_definitions(self):
+        """Populate custom_node_defs with existing definitions from the document."""
+        # Find existing custom node definitions
+        for nodedef in self.document.getNodeDefs():
+            name = nodedef.getName()
+            if name.startswith("ND_"):
+                if "brick_texture" in name:
+                    self.custom_node_defs["brick_texture"] = {
+                        "nodedef": nodedef,
+                        "implementation": self.document.getNodeGraph("IM_brick_texture")
+                    }
+                elif "curvelookup" in name:
+                    self.custom_node_defs["curvelookup"] = {
+                        "nodedef": nodedef,
+                        "implementation": self.document.getNodeGraph("IM_curvelookup")
+                    }
+                elif "convert_vector3_to_vector2" in name:
+                    self.custom_node_defs["convert_vector3_to_vector2"] = {
+                        "nodedef": nodedef,
+                        "implementation": self.document.getNodeGraph("IM_convert_vector3_to_vector2_vector2")
+                    }
+                elif "convert_vector2_to_vector3" in name:
+                    self.custom_node_defs["convert_vector2_to_vector3"] = {
+                        "nodedef": nodedef,
+                        "implementation": self.document.getNodeGraph("IM_convert_vector2_to_vector3_vector3")
+                    }
+                elif "convert_color3_to_vector2" in name:
+                    self.custom_node_defs["convert_color3_to_vector2"] = {
+                        "nodedef": nodedef,
+                        "implementation": self.document.getNodeGraph("IM_convert_color3_to_vector2_vector2")
+                    }
+                elif "convert_vector4_to_vector3" in name:
+                    self.custom_node_defs["convert_vector4_to_vector3"] = {
+                        "nodedef": nodedef,
+                        "implementation": self.document.getNodeGraph("IM_convert_vector4_to_vector3_vector3")
+                    }
+                elif "convert_vector3_to_vector4" in name:
+                    self.custom_node_defs["convert_vector3_to_vector4"] = {
+                        "nodedef": nodedef,
+                        "implementation": self.document.getNodeGraph("IM_convert_vector3_to_vector4_vector4")
+                    }
+                elif "convert_color4_to_color3" in name:
+                    self.custom_node_defs["convert_color4_to_color3"] = {
+                        "nodedef": nodedef,
+                        "implementation": self.document.getNodeGraph("IM_convert_color4_to_color3_color3")
+                    }
+                elif "convert_color3_to_color4" in name:
+                    self.custom_node_defs["convert_color3_to_color4"] = {
+                        "nodedef": nodedef,
+                        "implementation": self.document.getNodeGraph("IM_convert_color3_to_color4_color4")
+                    }
+        
+        self.logger.info(f"Populated {len(self.custom_node_defs)} existing custom node definitions")
         # Add more custom definitions here as needed
     
     def _add_brick_texture_definition(self):
@@ -34,11 +95,13 @@ class CustomNodeDefinitionManager:
         
         # Check if the node definition already exists
         existing_nodedef = self.document.getNodeDef("ND_brick_texture")
-        if existing_nodedef:
-            self.logger.info("Brick texture node definition already exists, skipping creation")
+        existing_impl = self.document.getNodeGraph("IM_brick_texture")
+        
+        if existing_nodedef and existing_impl:
+            self.logger.info("Brick texture node definition and implementation already exist, skipping creation")
             self.custom_node_defs["brick_texture"] = {
                 "nodedef": existing_nodedef,
-                "implementation": self.document.getNodeGraph("IM_brick_texture")
+                "implementation": existing_impl
             }
             return
         
@@ -93,11 +156,13 @@ class CustomNodeDefinitionManager:
         
         # Check if the node definition already exists
         existing_nodedef = self.document.getNodeDef("ND_curvelookup")
-        if existing_nodedef:
-            self.logger.info("Curve lookup node definition already exists, skipping creation")
+        existing_impl = self.document.getNodeGraph("IM_curvelookup")
+        
+        if existing_nodedef and existing_impl:
+            self.logger.info("Curve lookup node definition and implementation already exist, skipping creation")
             self.custom_node_defs["curvelookup"] = {
                 "nodedef": existing_nodedef,
-                "implementation": self.document.getNodeGraph("IM_curvelookup")
+                "implementation": existing_impl
             }
             return
         
@@ -179,10 +244,12 @@ class CustomNodeDefinitionManager:
         
         # Check if already exists
         existing_nodedef = self.document.getNodeDef("ND_convert_vector3_to_vector2_vector2")
-        if existing_nodedef:
+        existing_impl = self.document.getNodeGraph("IM_convert_vector3_to_vector2_vector2")
+        
+        if existing_nodedef and existing_impl:
             self.custom_node_defs["convert_vector3_to_vector2"] = {
                 "nodedef": existing_nodedef,
-                "implementation": self.document.getNodeGraph("IM_convert_vector3_to_vector2_vector2")
+                "implementation": existing_impl
             }
             return
         
@@ -693,7 +760,7 @@ class CustomNodeDefinitionManager:
         in4_input.setNodeName("a_one.out")
         
         # Output
-        output = nodegraph.addOutput("out", "color4")
+        output = nodegraph.addOutput("c3_to_c4_out", "color4")
         output.setNodeName("combine_rgba.out")
 
     def _create_brick_texture_implementation(self, nodegraph: mx.NodeGraph):

@@ -970,7 +970,24 @@ class MaterialXDocumentManager:
         """Initialize the custom node manager when needed."""
         if self.custom_node_manager is None:
             try:
-                self.custom_node_manager = CustomNodeDefinitionManager(self.document, self.logger)
+                # Check if custom node definitions already exist in the document
+                existing_definitions = []
+                for nodedef in self.document.getNodeDefs():
+                    if nodedef.getName().startswith("ND_") and (
+                        "brick_texture" in nodedef.getName() or 
+                        "curvelookup" in nodedef.getName() or
+                        "convert_" in nodedef.getName()
+                    ):
+                        existing_definitions.append(nodedef.getName())
+                
+                if existing_definitions:
+                    self.logger.info(f"Custom node definitions already exist: {existing_definitions}")
+                    # Create a minimal custom node manager that doesn't recreate definitions
+                    self.custom_node_manager = CustomNodeDefinitionManager(self.document, self.logger)
+                    self.custom_node_manager.skip_definition_creation = True
+                else:
+                    self.custom_node_manager = CustomNodeDefinitionManager(self.document, self.logger)
+                
                 self.logger.info("Custom node definitions manager initialized")
             except Exception as e:
                 self.logger.error(f"Failed to initialize custom node manager: {str(e)}")
@@ -2319,11 +2336,9 @@ class MaterialXLibraryBuilder:
             
             return node_name
         else:
-            # Fallback: create a placeholder node
-            placeholder_name = f"placeholder_{node_type}_{self.node_counter}"
-            self.node_counter += 1
-            self.logger.warning(f"Created placeholder node: {placeholder_name}")
-            return placeholder_name
+            # No node definition found - return None to indicate failure
+            self.logger.warning(f"No node definition found for {node_type} (category: {node_type_category})")
+            return None
     
     def add_surface_shader_node(self, node_type: str, name: str, **params) -> str:
         """
@@ -2355,7 +2370,9 @@ class MaterialXLibraryBuilder:
             
             return node_name
         else:
-            return f"surface_{node_type}_{self.node_counter}"
+            # No node definition found - return None to indicate failure
+            self.logger.warning(f"No surface shader node definition found for {node_type}")
+            return None
     
     def add_connection(self, from_node: str, from_output: str, to_node: str, to_input: str):
         """
@@ -2736,14 +2753,12 @@ class MaterialXLibraryBuilder:
     
     def _initialize_custom_node_manager(self):
         """Initialize the custom node manager when needed."""
+        # Use the custom node manager from the document manager instead of creating a new one
         if self.doc_manager.custom_node_manager is None:
-            try:
-                self.doc_manager.custom_node_manager = CustomNodeDefinitionManager(self.document, self.logger)
-                self.logger.info("Custom node definitions manager initialized")
-            except Exception as e:
-                self.logger.error(f"Failed to initialize custom node manager: {str(e)}")
-                self.doc_manager.custom_node_manager = None
-
+            self.doc_manager._initialize_custom_node_manager()
+        
+        # Set our reference to the document manager's custom node manager
+        self.custom_node_manager = self.doc_manager.custom_node_manager
     
     def cleanup(self):
         """
