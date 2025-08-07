@@ -38,7 +38,7 @@ This script automatically finds the latest Blender installation and installs the
 After deploying changes, test them using the provided test script:
 
 ```bash
-python3 test_blender_addon.py
+python3 run_tests.py
 ```
 
 This comprehensive test script:

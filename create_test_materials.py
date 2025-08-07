@@ -729,6 +729,157 @@ def create_mtlx_jade_material():
     
     return material
 
+def create_brick_texture_material():
+    """Create a material using the Brick Texture node to test custom node definitions."""
+    material = bpy.data.materials.new(name="BrickTexture")
+    material.use_nodes = True
+    nodes = material.node_tree.nodes
+    links = material.node_tree.links
+    
+    # Clear default nodes
+    nodes.clear()
+    
+    # Create Brick Texture node
+    brick_tex = nodes.new(type='ShaderNodeTexBrick')
+    brick_tex.location = (-400, 0)
+    
+    # Configure brick texture parameters
+    brick_tex.inputs['Color1'].default_value = (0.8, 0.2, 0.2, 1.0)  # Red bricks
+    brick_tex.inputs['Color2'].default_value = (0.2, 0.2, 0.8, 1.0)  # Blue bricks
+    brick_tex.inputs['Mortar'].default_value = (0.2, 0.2, 0.2, 1.0)  # Dark mortar
+    brick_tex.inputs['Scale'].default_value = 5.0
+    brick_tex.inputs['Mortar Size'].default_value = 0.02
+    brick_tex.inputs['Bias'].default_value = 0.0
+    brick_tex.inputs['Brick Width'].default_value = 0.5
+    brick_tex.inputs['Row Height'].default_value = 0.25
+    
+    # Create Principled BSDF
+    principled = nodes.new(type='ShaderNodeBsdfPrincipled')
+    principled.location = (0, 0)
+    principled.inputs['Roughness'].default_value = 0.8
+    principled.inputs['Metallic'].default_value = 0.0
+    
+    # Create Material Output
+    output = nodes.new(type='ShaderNodeOutputMaterial')
+    output.location = (300, 0)
+    
+    # Connect brick texture to base color
+    links.new(brick_tex.outputs['Color'], principled.inputs['Base Color'])
+    links.new(principled.outputs['BSDF'], output.inputs['Surface'])
+    
+    return material
+
+def create_brick_texture_complex_material():
+    """Create a complex material using Brick Texture with additional processing."""
+    material = bpy.data.materials.new(name="BrickTextureComplex")
+    material.use_nodes = True
+    nodes = material.node_tree.nodes
+    links = material.node_tree.links
+    
+    # Clear default nodes
+    nodes.clear()
+    
+    # Create Texture Coordinate node
+    tex_coord = nodes.new(type='ShaderNodeTexCoord')
+    tex_coord.location = (-800, 0)
+    
+    # Create Brick Texture node
+    brick_tex = nodes.new(type='ShaderNodeTexBrick')
+    brick_tex.location = (-600, 0)
+    
+    # Configure brick texture parameters
+    brick_tex.inputs['Color1'].default_value = (0.9, 0.6, 0.3, 1.0)  # Orange bricks
+    brick_tex.inputs['Color2'].default_value = (0.7, 0.4, 0.2, 1.0)  # Brown bricks
+    brick_tex.inputs['Mortar'].default_value = (0.1, 0.1, 0.1, 1.0)  # Dark mortar
+    brick_tex.inputs['Scale'].default_value = 8.0
+    brick_tex.inputs['Mortar Size'].default_value = 0.015
+    brick_tex.inputs['Bias'].default_value = 0.5
+    brick_tex.inputs['Brick Width'].default_value = 0.6
+    brick_tex.inputs['Row Height'].default_value = 0.3
+    
+    # Create Color Ramp for additional processing
+    color_ramp = nodes.new(type='ShaderNodeValToRGB')
+    color_ramp.location = (-400, 0)
+    color_ramp.color_ramp.elements[0].position = 0.3
+    color_ramp.color_ramp.elements[0].color = (0.1, 0.1, 0.1, 1.0)
+    color_ramp.color_ramp.elements[1].position = 0.7
+    color_ramp.color_ramp.elements[1].color = (1.0, 1.0, 1.0, 1.0)
+    
+    # Create Mix RGB node for color variation
+    mix_rgb = nodes.new(type='ShaderNodeMixRGB')
+    mix_rgb.location = (-200, 0)
+    mix_rgb.blend_type = 'MULTIPLY'
+    mix_rgb.inputs['Fac'].default_value = 0.3
+    
+    # Create Principled BSDF
+    principled = nodes.new(type='ShaderNodeBsdfPrincipled')
+    principled.location = (0, 0)
+    principled.inputs['Roughness'].default_value = 0.7
+    principled.inputs['Metallic'].default_value = 0.0
+    
+    # Create Material Output
+    output = nodes.new(type='ShaderNodeOutputMaterial')
+    output.location = (300, 0)
+    
+    # Connect nodes
+    links.new(tex_coord.outputs['Generated'], brick_tex.inputs['Vector'])
+    links.new(brick_tex.outputs['Color'], color_ramp.inputs['Fac'])
+    links.new(brick_tex.outputs['Color'], mix_rgb.inputs['Color1'])
+    links.new(color_ramp.outputs['Color'], mix_rgb.inputs['Color2'])
+    links.new(mix_rgb.outputs['Color'], principled.inputs['Base Color'])
+    links.new(principled.outputs['BSDF'], output.inputs['Surface'])
+    
+    return material
+
+def create_type_conversion_test_material():
+    """Create a material that tests various type conversions."""
+    material = bpy.data.materials.new(name="TypeConversionTest")
+    material.use_nodes = True
+    nodes = material.node_tree.nodes
+    links = material.node_tree.links
+    
+    # Clear default nodes
+    nodes.clear()
+    
+    # Create Texture Coordinate node (vector2)
+    tex_coord = nodes.new(type='ShaderNodeTexCoord')
+    tex_coord.location = (-800, 0)
+    
+    # Create Vector Math node that expects vector3
+    vector_math = nodes.new(type='ShaderNodeVectorMath')
+    vector_math.location = (-600, 0)
+    vector_math.operation = 'NORMALIZE'
+    
+    # Create Color Ramp that expects float
+    color_ramp = nodes.new(type='ShaderNodeValToRGB')
+    color_ramp.location = (-400, 0)
+    color_ramp.color_ramp.elements[0].position = 0.4
+    color_ramp.color_ramp.elements[0].color = (0.1, 0.1, 0.1, 1.0)
+    color_ramp.color_ramp.elements[1].position = 0.6
+    color_ramp.color_ramp.elements[1].color = (0.8, 0.8, 0.8, 1.0)
+    
+    # Create Mix RGB node
+    mix_rgb = nodes.new(type='ShaderNodeMixRGB')
+    mix_rgb.location = (-200, 0)
+    mix_rgb.blend_type = 'MULTIPLY'
+    
+    # Create Principled BSDF
+    principled = nodes.new(type='ShaderNodeBsdfPrincipled')
+    principled.location = (0, 0)
+    
+    # Create Material Output
+    output = nodes.new(type='ShaderNodeOutputMaterial')
+    output.location = (300, 0)
+    
+    # Connect nodes (this will test type conversions)
+    links.new(tex_coord.outputs['UV'], vector_math.inputs['Vector'])  # vector2 -> vector3
+    links.new(vector_math.outputs['Vector'], color_ramp.inputs['Fac'])  # vector3 -> float
+    links.new(color_ramp.outputs['Color'], mix_rgb.inputs['Color1'])
+    links.new(mix_rgb.outputs['Color'], principled.inputs['Base Color'])
+    links.new(principled.outputs['BSDF'], output.inputs['Surface'])
+    
+    return material
+
 def create_test_scene_and_save(material_func, filename):
     """Create a test scene with the given material and save it."""
     clear_scene()
@@ -805,6 +956,11 @@ def main():
         (create_mtlx_chrome_material, "MTLX_Chrome"),
         (create_mtlx_copper_material, "MTLX_Copper"),
         (create_mtlx_jade_material, "MTLX_Jade"),
+        
+        # New custom node and type conversion tests
+        (create_brick_texture_material, "BrickTexture"),
+        (create_brick_texture_complex_material, "BrickTextureComplex"),
+        (create_type_conversion_test_material, "TypeConversionTest"),
     ]
     
     created_files = []

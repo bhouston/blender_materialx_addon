@@ -41,6 +41,18 @@ except ImportError as e:
     from materialx_library_core import MaterialXLibraryBuilder, MaterialXDocumentManager, MaterialXTypeConverter
     print("MaterialX library core imported via fallback")
 
+# Import the MaterialX validator
+try:
+    from . import materialx_validator
+    from .materialx_validator import MaterialXValidator, validate_materialx_document, validate_materialx_file
+    print("MaterialX validator imported successfully")
+except ImportError as e:
+    print(f"Failed to import MaterialX validator: {e}")
+    # Fallback for direct import
+    import materialx_validator
+    from materialx_validator import MaterialXValidator, validate_materialx_document, validate_materialx_file
+    print("MaterialX validator imported via fallback")
+
 
 def get_input_value_or_connection(node, input_name, exported_nodes=None) -> Tuple[bool, Any, str]:
     """
@@ -190,7 +202,7 @@ NODE_SCHEMAS = {
         {'blender': 'Transmission Extra Roughness', 'mtlx': 'transmission_extra_roughness', 'type': 'float', 'category': 'surfaceshader'},
         
         # Opacity
-        {'blender': 'Alpha', 'mtlx': 'opacity', 'type': 'float', 'category': 'surfaceshader'},
+{'blender': 'Alpha', 'mtlx': 'opacity', 'type': 'color3', 'category': 'surfaceshader'},
         
         # Normal mapping
         {'blender': 'Normal', 'mtlx': 'normal', 'type': 'vector3', 'category': 'surfaceshader'},
@@ -242,10 +254,10 @@ NODE_SCHEMAS = {
         }
     },
     'NOISE_TEXTURE': [
-        {'blender': 'Vector', 'mtlx': 'texcoord', 'type': 'vector3', 'category': 'color3'},
-        {'blender': 'Scale', 'mtlx': 'scale', 'type': 'float', 'category': 'color3'},
-        {'blender': 'Detail', 'mtlx': 'detail', 'type': 'float', 'category': 'color3'},
-        {'blender': 'Roughness', 'mtlx': 'roughness', 'type': 'float', 'category': 'color3'},
+        {'blender': 'Vector', 'mtlx': 'position', 'type': 'vector3', 'category': 'color3'},
+        {'blender': 'Scale', 'mtlx': 'amplitude', 'type': 'float', 'category': 'color3'},
+        {'blender': 'Detail', 'mtlx': 'octaves', 'type': 'integer', 'category': 'color3'},
+        {'blender': 'Roughness', 'mtlx': 'diminish', 'type': 'float', 'category': 'color3'},
     ],
     'GRADIENT_TEXTURE': [
         {'blender': 'Vector', 'mtlx': 'texcoord', 'type': 'vector3', 'category': 'color3'},
@@ -868,6 +880,46 @@ class MaterialXBuilder:
         """Validate document using enhanced validation."""
         return self.library_builder.validate()
     
+    def validate_with_details(self) -> Dict[str, Any]:
+        """
+        Validate document with detailed results.
+        
+        Returns:
+            Dict containing comprehensive validation results
+        """
+        try:
+            # Get the MaterialX document from the library builder
+            if hasattr(self.library_builder, 'document') and self.library_builder.document:
+                # Create validator and load standard libraries
+                validator = MaterialXValidator(self.logger)
+                validator.load_standard_libraries()
+                
+                # Validate the document
+                validation_results = validator.validate_document(
+                    self.library_builder.document,
+                    resolve_inheritance=True,
+                    verbose=True,
+                    include_stdlib=True
+                )
+                
+                return validation_results
+            else:
+                return {
+                    'valid': False,
+                    'errors': ['No document available for validation'],
+                    'warnings': [],
+                    'info': []
+                }
+                
+        except Exception as e:
+            self.logger.error(f"Validation with details failed: {str(e)}")
+            return {
+                'valid': False,
+                'errors': [f'Validation failed: {str(e)}'],
+                'warnings': [],
+                'info': []
+            }
+    
     def set_write_options(self, **options):
         """Set write options for the library builder."""
         if hasattr(self.library_builder, 'set_write_options'):
@@ -987,6 +1039,7 @@ class NodeMapper:
             'COMBINE_XYZ': NodeMapper.map_merge_vector,
 
             'TEX_MUSGRAVE': NodeMapper.map_musgrave_texture_enhanced,
+            'TEX_BRICK': NodeMapper.map_brick_texture_enhanced,
             # New utility nodes
             'NEW_GEOMETRY': NodeMapper.map_geometry_info_enhanced,
             'OBJECT_INFO': NodeMapper.map_object_info_enhanced,
@@ -1460,31 +1513,8 @@ class NodeMapper:
                         mtlx_source_type = blender_to_mtlx_type.get(source_node_type, 'constant')
                         output_name = builder.get_node_output_name(mtlx_source_type)
                         
-                        # Handle type conversion for specific cases
-                        if source_node_type == 'TEX_NOISE' and mtlx_operation in ['modulo', 'ifgreater']:
-                            # Noise texture outputs color3, but modulo/ifgreater expect float
-                            # Create a luminance node to convert color3 to float
-                            luminance_node_name = f"luminance_{value_or_node}"
-                            
-                            # Use the enhanced type conversion system but with proper error handling
-                            try:
-                                # Create the luminance node
-                                luminance_node = builder.add_node('luminance', luminance_node_name, 'float')
-                                
-                                # Connect noise to luminance
-                                builder.add_connection(value_or_node, 'out', luminance_node_name, 'in')
-                                
-                                # Connect luminance to math node
-                                builder.add_connection(luminance_node_name, 'out', node_name, mtlx_param)
-                                
-                                builder.logger.info(f"Created luminance conversion: {value_or_node} -> {luminance_node_name} -> {node_name}")
-                            except Exception as e:
-                                builder.logger.warning(f"Luminance conversion failed: {e}")
-                                # Fallback to direct connection
-                                builder.add_connection(value_or_node, output_name, node_name, mtlx_param)
-                        else:
-                            # Normal connection
-                            builder.add_connection(value_or_node, output_name, node_name, mtlx_param)
+                        # Use automatic type conversion system
+                        builder.add_connection(value_or_node, output_name, node_name, mtlx_param)
                     else:
                         # Set default value using type-safe method
                         # For ifgreater nodes, we need to handle in3 and in4 parameters
@@ -1585,40 +1615,8 @@ class NodeMapper:
                     is_connected, value_or_node, type_str = get_input_value_or_connection(node, blender_input, exported_nodes)
                 
                 if is_connected:
-                    # Handle vector2 to vector3 conversion for position input
-                    if mtlx_param == 'texcoord' and type_str == 'VECTOR':
-                        # Create a combine3 node to convert vector2 to vector3
-                        combine_node_name = f"combine_{value_or_node}_to_vector3"
-                        combine_node = builder.add_node('combine3', combine_node_name, 'vector3')
-                        
-                        # Use direct MaterialX library calls to bypass enhanced type conversion
-                        try:
-                            # Get the MaterialX nodes
-                            from_node = builder.nodes.get(value_or_node)
-                            to_node = builder.nodes.get(combine_node_name)
-                            fractal_node = builder.nodes.get(node_name)
-                            
-                            if from_node and to_node and fractal_node:
-                                # Create input directly on the combine3 node
-                                input_port = to_node.addInput('in1', 'vector2')
-                                input_port.setConnectedNode(from_node)
-                                
-                                # Create input directly on the fractal3d node
-                                position_input = fractal_node.addInput('position', 'vector3')
-                                position_input.setConnectedNode(to_node)
-                                
-                                builder.logger.info(f"Created vector2->vector3 conversion: {value_or_node} -> {combine_node_name} -> {node_name}.position")
-                            else:
-                                builder.logger.warning(f"Failed to find nodes for direct connection")
-                                # Fallback to normal connection
-                                builder.add_connection(value_or_node, 'out', node_name, 'position')
-                        except Exception as e:
-                            builder.logger.warning(f"Direct connection failed: {e}")
-                            # Fallback to normal connection
-                            builder.add_connection(value_or_node, 'out', node_name, 'position')
-                    else:
-                        # Normal connection
-                        builder.add_connection(value_or_node, 'out', node_name, mtlx_param)
+                    # Use automatic type conversion system
+                    builder.add_connection(value_or_node, 'out', node_name, mtlx_param)
                 else:
                     # Set default values
                     if mtlx_param == 'texcoord':
@@ -1847,6 +1845,42 @@ class NodeMapper:
     def map_musgrave_texture_enhanced(node, builder: MaterialXBuilder, input_nodes: Dict, input_nodes_by_index: Dict = None, blender_node=None, constant_manager=None, exported_nodes=None) -> str:
         """Enhanced musgrave texture mapping with type-safe input creation."""
         return map_node_with_schema_enhanced(node, builder, NODE_SCHEMAS['TEX_MUSGRAVE'], 'musgrave', 'color3', constant_manager, exported_nodes)
+
+    @staticmethod
+    def map_brick_texture_enhanced(node, builder: MaterialXBuilder, input_nodes: Dict, input_nodes_by_index: Dict = None, blender_node=None, constant_manager=None, exported_nodes=None) -> str:
+        """Enhanced brick texture mapping with type-safe input creation."""
+        # Ensure custom node definition is available
+        if builder.library_builder.doc_manager.custom_node_manager is None:
+            builder.library_builder.doc_manager._initialize_custom_node_manager()
+        
+        # Create the brick texture node using our custom definition
+        node_name = builder.add_node('brick_texture', f"brick_{node.name}", 'texture2d')
+        
+        # Map inputs
+        input_mapping = {
+            'Vector': 'texcoord',
+            'Color1': 'color1', 
+            'Color2': 'color2',
+            'Mortar': 'mortar',
+            'Scale': 'scale',
+            'Mortar Size': 'mortar_size',
+            'Bias': 'bias',
+            'Brick Width': 'brick_width',
+            'Row Height': 'row_height'
+        }
+        
+        # Connect inputs
+        for blender_input, mtlx_input in input_mapping.items():
+            if blender_input in input_nodes:
+                builder.add_connection(input_nodes[blender_input], 'out', node_name, mtlx_input)
+            elif hasattr(node.inputs, blender_input) and node.inputs[blender_input].default_value is not None:
+                # Set default value
+                value = node.inputs[blender_input].default_value
+                if isinstance(value, (list, tuple)) and len(value) == 4:
+                    value = value[:3]  # Convert RGBA to RGB
+                builder.add_surface_shader_input(node_name, mtlx_input, 'color3' if isinstance(value, (list, tuple)) else 'float', value=str(value))
+        
+        return node_name
 
     # New utility node mappers
     @staticmethod
@@ -2314,7 +2348,7 @@ def export_material_to_materialx(material: bpy.types.Material,
                                 options: Dict = None) -> dict:
     """
     Export a Blender material to MaterialX format.
-    Returns a dict with success, unsupported_nodes, output_path, and error (if any).
+    Returns a dict with success, unsupported_nodes, output_path, validation_results, and error (if any).
     """
     # Initialize logging
     if logger is None:
@@ -2336,18 +2370,75 @@ def export_material_to_materialx(material: bpy.types.Material,
     logger.info(f"Options type: {type(options)}")
     if options:
         logger.info(f"strict_mode in options: {options.get('strict_mode', 'NOT_FOUND')}")
+    
+    # Initialize validation results
+    validation_results = None
+    
     try:
         exporter = MaterialXExporter(material, output_path, logger, options)
         logger.info("MaterialXExporter instance created successfully")
         result = exporter.export()
         logger.info(f"Export result: {result}")
+        
+        # Perform validation if export was successful
+        if result.get('success', False) and os.path.exists(output_path):
+            logger.info("=" * 50)
+            logger.info("PERFORMING MATERIALX VALIDATION")
+            logger.info("=" * 50)
+            
+            try:
+                # Create validator and load standard libraries
+                validator = MaterialXValidator(logger)
+                validator.load_standard_libraries()
+                
+                # Validate the exported file
+                validation_results = validator.validate_file(
+                    output_path,
+                    resolve_inheritance=True,
+                    verbose=True,
+                    include_stdlib=True
+                )
+                
+                # Print validation report
+                validator.print_validation_report(validation_results, verbose=True)
+                
+                # Add validation results to export result
+                result['validation_results'] = validation_results
+                
+                # Log validation summary
+                if validation_results['valid']:
+                    logger.info("✓ MaterialX file validation PASSED")
+                else:
+                    logger.warning("⚠ MaterialX file validation FAILED")
+                    if validation_results['errors']:
+                        logger.error(f"Validation errors: {len(validation_results['errors'])}")
+                    if validation_results['warnings']:
+                        logger.warning(f"Validation warnings: {len(validation_results['warnings'])}")
+                
+            except Exception as validation_error:
+                logger.error(f"Validation process failed: {str(validation_error)}")
+                validation_results = {
+                    'valid': False,
+                    'errors': [f"Validation process failed: {str(validation_error)}"],
+                    'warnings': [],
+                    'info': []
+                }
+                result['validation_results'] = validation_results
+        
         return result
+        
     except Exception as e:
         import traceback
         logger.error(f"EXCEPTION in export_material_to_materialx: {type(e).__name__}: {str(e)}")
         logger.error("Full traceback:")
         traceback.print_exc()
-        return {"success": False, "unsupported_nodes": [], "output_path": output_path, "error": str(e)}
+        return {
+            "success": False, 
+            "unsupported_nodes": [], 
+            "output_path": output_path, 
+            "validation_results": validation_results,
+            "error": str(e)
+        }
 
 
 def export_all_materials_to_materialx(output_directory: str, logger, options: Dict = None) -> Dict[str, bool]:
@@ -2373,5 +2464,5 @@ def export_all_materials_to_materialx(output_directory: str, logger, options: Di
     return results
 
 
-# Note: Testing functions have been moved to test_blender_addon.py
+# Note: Testing functions have been moved to run_tests.py
 # This file now focuses on the core export functionality 

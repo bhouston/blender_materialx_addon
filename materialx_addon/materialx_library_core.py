@@ -26,6 +26,123 @@ print("DEBUG: MaterialX library core module loaded")
 import MaterialX as mx
 import os
 import sys
+import logging
+import time
+import traceback
+from typing import Dict, List, Optional, Any, Tuple
+
+# Import custom node definitions
+try:
+    from .custom_node_definitions import CustomNodeDefinitionManager, get_custom_node_type, is_custom_node_type
+except ImportError:
+    # Fallback for when running as standalone
+    from custom_node_definitions import CustomNodeDefinitionManager, get_custom_node_type, is_custom_node_type
+
+# Enhanced MaterialX Type Conversion Registry
+# This registry defines valid MaterialX type conversions using only MaterialX-compliant nodes
+MATERIALX_TYPE_CONVERSIONS = {
+    # Single-step conversions (existing)
+    ('vector2', 'vector3'): {
+        'type': 'single',
+        'node_type': 'combine3',
+        'node_def': 'ND_combine3_vector3',
+        'input_mapping': {'in1': 'source', 'in2': '0', 'in3': '0'},
+        'output': 'out',
+        'description': 'Convert vector2 to vector3 by adding Z=0'
+    },
+    
+    # New multi-step conversions
+    ('vector2', 'vector4'): {
+        'type': 'multi_step',
+        'steps': [
+            ('vector2', 'vector3'),
+            ('vector3', 'vector4')
+        ],
+        'description': 'Convert vector2 to vector4 via vector3'
+    },
+    
+    ('vector3', 'vector4'): {
+        'type': 'single',
+        'node_type': 'combine4',
+        'node_def': 'ND_combine4_vector4',
+        'input_mapping': {'in1': 'source', 'in2': 'source', 'in3': 'source', 'in4': '1'},
+        'output': 'out',
+        'description': 'Convert vector3 to vector4 by adding W=1'
+    },
+    
+    ('color3', 'vector4'): {
+        'type': 'multi_step',
+        'steps': [
+            ('color3', 'vector3'),
+            ('vector3', 'vector4')
+        ],
+        'description': 'Convert color3 to vector4 via vector3'
+    },
+    
+    ('float', 'vector4'): {
+        'type': 'multi_step',
+        'steps': [
+            ('float', 'vector3'),
+            ('vector3', 'vector4')
+        ],
+        'description': 'Convert float to vector4 via vector3'
+    },
+    
+    ('float', 'vector3'): {
+        'type': 'single',
+        'node_type': 'combine3',
+        'node_def': 'ND_combine3_vector3',
+        'input_mapping': {'in1': 'source', 'in2': 'source', 'in3': 'source'},
+        'output': 'out',
+        'description': 'Convert float to vector3 by replicating value'
+    },
+    
+    # Color conversions (existing)
+    ('color3', 'float'): {
+        'type': 'single',
+        'node_type': 'luminance',
+        'node_def': 'ND_luminance_color3',
+        'input_mapping': {'in': 'source'},
+        'output': 'out',
+        'description': 'Convert color3 to float using luminance'
+    },
+    ('float', 'color3'): {
+        'type': 'single',
+        'node_type': 'combine3',
+        'node_def': 'ND_combine3_color3',
+        'input_mapping': {'in1': 'source', 'in2': 'source', 'in3': 'source'},
+        'output': 'out',
+        'description': 'Convert float to color3 by replicating value to RGB'
+    },
+    ('color3', 'vector3'): {
+        'type': 'single',
+        'node_type': 'combine3',
+        'node_def': 'ND_combine3_vector3',
+        'input_mapping': {'in1': 'source', 'in2': 'source', 'in3': 'source'},
+        'output': 'out',
+        'description': 'Convert color3 to vector3 by treating RGB as XYZ'
+    },
+    ('vector3', 'color3'): {
+        'type': 'single',
+        'node_type': 'combine3',
+        'node_def': 'ND_combine3_color3',
+        'input_mapping': {'in1': 'source', 'in2': 'source', 'in3': 'source'},
+        'output': 'out',
+        'description': 'Convert vector3 to color3 by treating XYZ as RGB'
+    },
+    
+    # Additional vector conversions
+    ('vector2', 'color3'): {
+        'type': 'single',
+        'node_type': 'combine3',
+        'node_def': 'ND_combine3_color3',
+        'input_mapping': {'in1': 'source', 'in2': 'source', 'in3': '0'},
+        'output': 'out',
+        'description': 'Convert vector2 to color3 by using X,Y as R,G and setting B=0'
+    },
+}
+import os
+import sys
 import time
 import gc
 from pathlib import Path
@@ -540,6 +657,9 @@ class MaterialXDocumentManager:
         self._input_def_cache = {}
         self._output_def_cache = {}
         
+        # Custom node definitions manager
+        self.custom_node_manager = None
+        
     def load_libraries(self, custom_search_path: Optional[str] = None) -> bool:
         """
         Load MaterialX libraries with proper version handling.
@@ -606,6 +726,10 @@ class MaterialXDocumentManager:
             self.document.importLibrary(self.libraries)
             self.logger.info(f"Working document has {len(self.document.getNodeDefs())} node definitions after import")
             
+            # Initialize custom node definitions manager (lazy initialization)
+            self.custom_node_manager = None
+            self.logger.info("Custom node definitions manager will be initialized when needed")
+            
             # Validate document after creation
             validation_results = self.advanced_validator.validate_document_comprehensive(self.document)
             if not validation_results['valid']:
@@ -626,6 +750,7 @@ class MaterialXDocumentManager:
     def get_node_definition(self, node_type: str, category: str = None) -> Optional[mx.NodeDef]:
         """
         Get a node definition from the loaded libraries with caching.
+        Includes support for custom node definitions.
         
         Args:
             node_type: The node type to find
@@ -634,6 +759,21 @@ class MaterialXDocumentManager:
         Returns:
             mx.NodeDef: The node definition or None if not found
         """
+        # Check for custom node definitions first
+        if self.custom_node_manager and self.custom_node_manager.has_custom_definition(node_type):
+            custom_nodedef = self.custom_node_manager.get_custom_node_definition(node_type)
+            if custom_nodedef:
+                self.logger.debug(f"Found custom node definition: {node_type}")
+                return custom_nodedef
+        
+        # Initialize custom node manager if needed for this node type
+        if self._is_custom_node_type(node_type):
+            self._initialize_custom_node_manager()
+            if self.custom_node_manager and self.custom_node_manager.has_custom_definition(node_type):
+                custom_nodedef = self.custom_node_manager.get_custom_node_definition(node_type)
+                if custom_nodedef:
+                    self.logger.debug(f"Found custom node definition: {node_type}")
+                    return custom_nodedef
         if not self.document:
             self.logger.error("No document available for node definition lookup")
             return None
@@ -813,6 +953,20 @@ class MaterialXDocumentManager:
             },
             'suggestions': self.performance_monitor.suggest_optimizations()
         }
+    
+    def _initialize_custom_node_manager(self):
+        """Initialize the custom node manager when needed."""
+        if self.custom_node_manager is None:
+            try:
+                self.custom_node_manager = CustomNodeDefinitionManager(self.document, self.logger)
+                self.logger.info("Custom node definitions manager initialized")
+            except Exception as e:
+                self.logger.error(f"Failed to initialize custom node manager: {str(e)}")
+                self.custom_node_manager = None
+    
+    def _is_custom_node_type(self, node_type: str) -> bool:
+        """Check if a node type requires custom definitions."""
+        return node_type in ["brick_texture"]
     
     def cleanup(self):
         """Clean up resources and free memory."""
@@ -1317,7 +1471,7 @@ class MaterialXNodeBuilder:
     def connect_nodes(self, from_node: mx.Node, from_output: str, 
                      to_node: mx.Node, to_input: str) -> bool:
         """
-        Connect two nodes with type validation and automatic conversion.
+        Connect two nodes with enhanced type conversion support.
         
         Args:
             from_node: The source node
@@ -1352,13 +1506,24 @@ class MaterialXNodeBuilder:
             
             self.logger.debug(f"Attempting connection: {from_node.getName()}.{from_output} ({from_type}) -> {to_node.getName()}.{to_input} ({to_type})")
             
-            # Check type compatibility
+            # Check if types are compatible for direct connection
+            if from_type == to_type:
+                self.logger.debug(f"Types match, direct connection: {from_type} -> {to_type}")
+                return self._direct_connect_nodes(from_node, from_output, to_node, to_input)
+            
+            # Check if conversion is supported in the registry
+            conversion_key = (from_type, to_type)
+            if conversion_key in MATERIALX_TYPE_CONVERSIONS:
+                self.logger.debug(f"Type conversion supported: {from_type} -> {to_type}, using registry")
+                return self._connect_with_enhanced_conversion(from_node, from_output, to_node, to_input, conversion_key)
+            
+            # Try legacy conversion as fallback
             if self.type_converter.validate_type_compatibility(from_type, to_type):
                 self.logger.debug(f"Types compatible, direct connection: {from_type} -> {to_type}")
                 return self._direct_connect_nodes(from_node, from_output, to_node, to_input)
             else:
                 # Types are incompatible, need conversion
-                self.logger.debug(f"Type mismatch detected: {from_type} -> {to_type}, attempting conversion")
+                self.logger.debug(f"Type mismatch detected: {from_type} -> {to_type}, attempting legacy conversion")
                 return self._connect_with_conversion(from_node, from_output, to_node, to_input, from_type, to_type)
             
         except MaterialXError:
@@ -1368,6 +1533,188 @@ class MaterialXNodeBuilder:
             error_msg = f"Unexpected error connecting {from_node.getName() if from_node else 'None'}.{from_output} -> {to_node.getName() if to_node else 'None'}.{to_input}: {str(e)}"
             self.logger.error(error_msg)
             raise MaterialXError(error_msg, "connection_exception", {"original_error": str(e)})
+    
+    def _connect_with_enhanced_conversion(self, from_node: mx.Node, from_output: str, 
+                                        to_node: mx.Node, to_input: str, conversion_key: Tuple[str, str]) -> bool:
+        """
+        Connect nodes with enhanced type conversion using the registry.
+        
+        Args:
+            from_node: The source node
+            from_output: The source output name
+            to_node: The target node
+            to_input: The target input name
+            conversion_key: The conversion key (from_type, to_type)
+            
+        Returns:
+            bool: True if connection successful
+        """
+        try:
+            from_type, to_type = conversion_key
+            conversion_spec = MATERIALX_TYPE_CONVERSIONS[conversion_key]
+            
+            if conversion_spec['type'] == 'single':
+                # Single-step conversion
+                return self._execute_single_conversion(from_node, from_output, to_node, to_input, conversion_spec)
+            elif conversion_spec['type'] == 'multi_step':
+                # Multi-step conversion
+                return self._execute_multi_step_conversion(from_node, from_output, to_node, to_input, conversion_spec)
+            else:
+                raise MaterialXError(f"Unknown conversion type: {conversion_spec['type']}", "unknown_conversion_type")
+                
+        except MaterialXError:
+            # Re-raise MaterialXError exceptions
+            raise
+        except Exception as e:
+            error_msg = f"Enhanced conversion failed: {from_node.getName()}.{from_output} -> {to_node.getName()}.{to_input} - {str(e)}"
+            self.logger.error(error_msg)
+            raise MaterialXError(error_msg, "enhanced_conversion_exception", {"original_error": str(e)})
+    
+    def _execute_single_conversion(self, from_node: mx.Node, from_output: str, 
+                                 to_node: mx.Node, to_input: str, conversion_spec: Dict) -> bool:
+        """Execute a single-step conversion."""
+        try:
+            # Create conversion node
+            conversion_name = f"convert_{from_node.getName()}_{to_node.getName()}_{conversion_spec['description'].replace(' ', '_')}"
+            conversion_name = from_node.getParent().createValidChildName(conversion_name)
+            
+            self.logger.debug(f"Creating single-step conversion node: {conversion_name} using {conversion_spec['node_type']}")
+            
+            # Create conversion node with proper node definition
+            conversion_node = from_node.getParent().addChildOfCategory(conversion_spec['node_type'], conversion_name)
+            if not conversion_node:
+                raise MaterialXError(f"Failed to create conversion node {conversion_name}", "conversion_node_creation_failed")
+            
+            # Set the node definition if specified
+            if conversion_spec.get('node_def'):
+                try:
+                    conversion_node.setNodeDefString(conversion_spec['node_def'])
+                except Exception as e:
+                    self.logger.warning(f"Failed to set node definition '{conversion_spec['node_def']}' on conversion node: {str(e)}")
+            
+            # Set the output type
+            conversion_node.setType(conversion_spec['output'])
+            
+            # Connect source to conversion node
+            source_input = None
+            for input_name, value in conversion_spec['input_mapping'].items():
+                if value == 'source':
+                    source_input = input_name
+                    break
+            
+            if not source_input:
+                # Fallback: use the first input
+                source_input = list(conversion_spec['input_mapping'].keys())[0]
+            
+            self._direct_connect_nodes(from_node, from_output, conversion_node, source_input)
+            
+            # Handle additional inputs for combine nodes (set constants)
+            if conversion_spec['node_type'] in ['combine3', 'combine4'] and len(conversion_spec['input_mapping']) > 1:
+                for input_name, value in conversion_spec['input_mapping'].items():
+                    if input_name != source_input:  # Skip the source input we already connected
+                        if value == '0':
+                            # Set constant value 0
+                            input_port = conversion_node.getInput(input_name)
+                            if input_port:
+                                input_port.setValue(0.0, 'float')
+                        elif value == '1':
+                            # Set constant value 1
+                            input_port = conversion_node.getInput(input_name)
+                            if input_port:
+                                input_port.setValue(1.0, 'float')
+                        elif value == 'source':
+                            # This should be the source input, but we already handled it
+                            pass
+                        else:
+                            # Set the specified value
+                            input_port = conversion_node.getInput(input_name)
+                            if input_port:
+                                input_port.setValue(float(value), 'float')
+            
+            # Connect conversion node to target
+            self._direct_connect_nodes(conversion_node, conversion_spec['output'], to_node, to_input)
+            
+            self.logger.debug(f"✓ Single-step conversion successful: {from_node.getName()}.{from_output} -> [{conversion_name}] -> {to_node.getName()}.{to_input}")
+            return True
+            
+        except Exception as e:
+            raise MaterialXError(f"Single-step conversion failed: {str(e)}", "single_step_conversion_failed", {"original_error": str(e)})
+    
+    def _execute_multi_step_conversion(self, from_node: mx.Node, from_output: str, 
+                                     to_node: mx.Node, to_input: str, conversion_spec: Dict) -> bool:
+        """Execute a multi-step conversion."""
+        try:
+            current_node = from_node
+            current_output = from_output
+            
+            # Execute each step in the conversion path
+            for step in conversion_spec['steps']:
+                from_type, to_type = step
+                step_conversion_key = (from_type, to_type)
+                
+                if step_conversion_key in MATERIALX_TYPE_CONVERSIONS:
+                    step_spec = MATERIALX_TYPE_CONVERSIONS[step_conversion_key]
+                    
+                    # Create intermediate conversion node
+                    step_name = f"convert_{current_node.getName()}_{from_type}_to_{to_type}"
+                    step_name = current_node.getParent().createValidChildName(step_name)
+                    
+                    self.logger.debug(f"Creating multi-step conversion node: {step_name} using {step_spec['node_type']}")
+                    
+                    # Create step conversion node
+                    step_node = current_node.getParent().addChildOfCategory(step_spec['node_type'], step_name)
+                    if not step_node:
+                        raise MaterialXError(f"Failed to create step conversion node {step_name}", "step_conversion_node_creation_failed")
+                    
+                    # Set the node definition if specified
+                    if step_spec.get('node_def'):
+                        try:
+                            step_node.setNodeDefString(step_spec['node_def'])
+                        except Exception as e:
+                            self.logger.warning(f"Failed to set node definition '{step_spec['node_def']}' on step node: {str(e)}")
+                    
+                    # Set the output type
+                    step_node.setType(step_spec['output'])
+                    
+                    # Connect current node to step node
+                    source_input = None
+                    for input_name, value in step_spec['input_mapping'].items():
+                        if value == 'source':
+                            source_input = input_name
+                            break
+                    
+                    if not source_input:
+                        source_input = list(step_spec['input_mapping'].keys())[0]
+                    
+                    self._direct_connect_nodes(current_node, current_output, step_node, source_input)
+                    
+                    # Handle additional inputs for combine nodes
+                    if step_spec['node_type'] in ['combine3', 'combine4'] and len(step_spec['input_mapping']) > 1:
+                        for input_name, value in step_spec['input_mapping'].items():
+                            if input_name != source_input:
+                                if value == '0':
+                                    input_port = step_node.getInput(input_name)
+                                    if input_port:
+                                        input_port.setValue(0.0, 'float')
+                                elif value == '1':
+                                    input_port = step_node.getInput(input_name)
+                                    if input_port:
+                                        input_port.setValue(1.0, 'float')
+                    
+                    # Update current node and output for next step
+                    current_node = step_node
+                    current_output = step_spec['output']
+                else:
+                    raise MaterialXError(f"Step conversion not found: {from_type} -> {to_type}", "step_conversion_not_found")
+            
+            # Final connection to target
+            self._direct_connect_nodes(current_node, current_output, to_node, to_input)
+            
+            self.logger.debug(f"✓ Multi-step conversion successful: {from_node.getName()}.{from_output} -> ... -> {to_node.getName()}.{to_input}")
+            return True
+            
+        except Exception as e:
+            raise MaterialXError(f"Multi-step conversion failed: {str(e)}", "multi_step_conversion_failed", {"original_error": str(e)})
     
     def _get_node_output_type(self, node: mx.Node, output_name: str) -> str:
         """Get the output type of a node."""
@@ -1618,7 +1965,7 @@ class MaterialXNodeBuilder:
             'transmission_scatter_anisotropy': 'float',
             'transmission_dispersion': 'float',
             'transmission_extra_roughness': 'float',
-            'opacity': 'float',
+            'opacity': 'color3',
             'emission': 'float',
             'emission_color': 'color3',
             'subsurface': 'float',
@@ -1742,7 +2089,7 @@ class MaterialXConnectionManager:
             'transmission_scatter_anisotropy': 'float',
             'transmission_dispersion': 'float',
             'transmission_extra_roughness': 'float',
-            'opacity': 'float',
+            'opacity': 'color3',
             'emission': 'float',
             'emission_color': 'color3',
             'subsurface': 'float',
@@ -2177,14 +2524,9 @@ class MaterialXLibraryBuilder:
             self.logger.info("Optimizing MaterialX document...")
             
             # Remove unused nodes
-            unused_nodes = self.advanced_validator._find_unused_nodes(self.document)
-            if unused_nodes:
-                self.logger.info(f"Removing {len(unused_nodes)} unused nodes")
-                for node in unused_nodes:
-                    try:
-                        node.getParent().removeChild(node.getName())
-                    except Exception as e:
-                        self.logger.warning(f"Failed to remove unused node {node.getName()}: {str(e)}")
+            removed_count = self.remove_unused_nodes()
+            if removed_count > 0:
+                self.logger.info(f"Removed {removed_count} unused nodes")
             
             # Clear caches to free memory
             self.doc_manager._clear_caches()
@@ -2204,6 +2546,110 @@ class MaterialXLibraryBuilder:
             self.performance_monitor.end_operation("optimize_document")
             return False
     
+    def remove_unused_nodes(self) -> int:
+        """
+        Remove unused nodes from the MaterialX document.
+        This is a reusable function that can be called independently.
+        
+        Returns:
+            int: Number of nodes removed
+        """
+        try:
+            self.logger.info("Starting unused node removal...")
+            
+            # Find all nodes in the document
+            all_nodes = self.document.getNodes()
+            if not all_nodes:
+                self.logger.debug("No nodes found in document")
+                return 0
+            
+            # Find nodes that are connected to outputs (used nodes)
+            used_nodes = set()
+            self._collect_connected_nodes_recursive(self.document, used_nodes)
+            
+            # Find unused nodes
+            unused_nodes = []
+            for node in all_nodes:
+                if node not in used_nodes:
+                    unused_nodes.append(node)
+            
+            # Remove unused nodes
+            removed_count = 0
+            for node in unused_nodes:
+                try:
+                    node_name = node.getName()
+                    node.removeFromParent()
+                    self.logger.debug(f"Removed unused node: {node_name}")
+                    removed_count += 1
+                except Exception as e:
+                    self.logger.warning(f"Failed to remove unused node {node.getName()}: {str(e)}")
+            
+            self.logger.info(f"Removed {removed_count} unused nodes from document")
+            return removed_count
+            
+        except Exception as e:
+            self.logger.error(f"Failed to remove unused nodes: {str(e)}")
+            return 0
+    
+    def _collect_connected_nodes_recursive(self, element: mx.Element, connected_nodes: set):
+        """
+        Recursively collect all nodes that are connected to outputs or other used nodes.
+        
+        Args:
+            element: The element to traverse
+            connected_nodes: Set to store connected nodes
+        """
+        try:
+            # If this is a node, add it to connected nodes
+            if element.isA(mx.Node):
+                connected_nodes.add(element)
+            
+            # Check all inputs of this element
+            for input_elem in element.getInputs():
+                # If input is connected to a node, that node is used
+                if input_elem.hasAttribute('nodename'):
+                    node_name = input_elem.getAttribute('nodename')
+                    node = element.getParent().getChild(node_name)
+                    if node and node.isA(mx.Node) and node not in connected_nodes:
+                        connected_nodes.add(node)
+                        # Recursively check this node's inputs
+                        self._collect_connected_nodes_recursive(node, connected_nodes)
+            
+            # Check all outputs of this element
+            for output_elem in element.getOutputs():
+                # If output is connected to other nodes, those nodes are used
+                # We need to find all nodes that reference this output
+                parent = element.getParent()
+                if parent:
+                    for node in parent.getNodes():
+                        for node_input in node.getInputs():
+                            if (node_input.hasAttribute('nodename') and 
+                                node_input.getAttribute('nodename') == element.getName()):
+                                if node not in connected_nodes:
+                                    connected_nodes.add(node)
+                                    # Recursively check this node's inputs
+                                    self._collect_connected_nodes_recursive(node, connected_nodes)
+            
+            # Check all children of this element
+            for child in element.getChildren():
+                self._collect_connected_nodes_recursive(child, connected_nodes)
+                
+        except Exception as e:
+            self.logger.warning(f"Error collecting connected nodes: {str(e)}")
+    
+    def _is_custom_node_type(self, node_type: str) -> bool:
+        """Check if a node type requires custom definitions."""
+        return node_type in ["brick_texture"]
+    
+    def _initialize_custom_node_manager(self):
+        """Initialize the custom node manager when needed."""
+        if self.doc_manager.custom_node_manager is None:
+            try:
+                self.doc_manager.custom_node_manager = CustomNodeDefinitionManager(self.document, self.logger)
+                self.logger.info("Custom node definitions manager initialized")
+            except Exception as e:
+                self.logger.error(f"Failed to initialize custom node manager: {str(e)}")
+                self.doc_manager.custom_node_manager = None
 
     
     def cleanup(self):

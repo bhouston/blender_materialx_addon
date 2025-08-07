@@ -103,7 +103,7 @@ The exporter returns comprehensive results including:
 Run the comprehensive test suite:
 
 ```bash
-python3 test_blender_addon.py
+python3 run_tests.py
 ```
 
 This tests:

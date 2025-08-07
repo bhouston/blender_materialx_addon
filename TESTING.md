@@ -4,7 +4,7 @@ This document provides comprehensive information about testing the MaterialX Exp
 
 ## 🧪 Test Scripts Overview
 
-### Main Test Script: `test_blender_addon.py`
+### Main Test Script: `run_tests.py`
 
 This is the **only** test script you need to run. It consolidates all testing functionality:
 
@@ -34,7 +34,7 @@ blender --background --python create_test_materials.py
 ### Running Tests
 
 ```bash
-python3 test_blender_addon.py
+python3 run_tests.py
 ```
 
 **Note**: The test script now preserves all exported MaterialX files in a `test_output_mtlx/` directory for inspection. This allows you to examine the actual output and identify any issues that might not be caught by the validation.
@@ -148,7 +148,7 @@ The test suite tracks:
 Test results are printed to stdout. To save the output to a file, use command line redirection:
 
 ```bash
-python3 test_blender_addon.py > test_results.txt 2>&1
+python3 run_tests.py > test_results.txt 2>&1
 ```
 
 ### Sample Test Report
