@@ -34,6 +34,7 @@ class CustomNodeDefinitionManager:
         self._add_brick_texture_definition()
         self._add_curve_rgb_definition()
         self._add_type_conversion_definitions()
+        self._add_voronoi_texture_definition()
     
     def _populate_existing_definitions(self):
         """Populate custom_node_defs with existing definitions from the document."""
@@ -86,23 +87,56 @@ class CustomNodeDefinitionManager:
                         "nodedef": nodedef,
                         "implementation": self.document.getNodeGraph("IM_convert_color3_to_color4_color4")
                     }
+                elif "voronoi" in name:
+                    self.custom_node_defs["voronoi"] = {
+                        "nodedef": nodedef,
+                        "implementation": self.document.getNodeGraph("IM_voronoi")
+                    }
         
         self.logger.info(f"Populated {len(self.custom_node_defs)} existing custom node definitions")
         # Add more custom definitions here as needed
     
+    def _check_existing_definition(self, base_name, node_type):
+        """Check if a node definition and implementation already exist.
+        
+        Args:
+            base_name: The base name for the node (e.g., "convert_vector3_to_vector2")
+            node_type: The output type (e.g., "vector2")
+            
+        Returns:
+            tuple: (nodedef, implementation) if both exist, (None, None) otherwise
+        """
+        nodedef_name = f"ND_{base_name}_{node_type}"
+        impl_name = f"IM_{base_name}_{node_type}"
+        
+        existing_nodedef = self.document.getNodeDef(nodedef_name)
+        existing_impl = self.document.getNodeGraph(impl_name)
+        
+        if existing_nodedef and existing_impl:
+            self.logger.info(f"{base_name} node definition and implementation already exist, skipping creation")
+            return existing_nodedef, existing_impl
+        elif existing_nodedef and not existing_impl:
+            # Node definition exists but implementation doesn't - this is an error state
+            self.logger.warning(f"{base_name} node definition exists but implementation is missing - this may cause issues")
+            return existing_nodedef, None
+        else:
+            # Neither exists, safe to create
+            return None, None
+
     def _add_brick_texture_definition(self):
         """Add Brick Texture node definition and implementation."""
         
         # Check if the node definition already exists
-        existing_nodedef = self.document.getNodeDef("ND_brick_texture")
-        existing_impl = self.document.getNodeGraph("IM_brick_texture")
-        
+        existing_nodedef, existing_impl = self._check_existing_definition("brick_texture", "")
         if existing_nodedef and existing_impl:
-            self.logger.info("Brick texture node definition and implementation already exist, skipping creation")
             self.custom_node_defs["brick_texture"] = {
                 "nodedef": existing_nodedef,
                 "implementation": existing_impl
             }
+            return
+        elif existing_nodedef and not existing_impl:
+            # Node definition exists but implementation is missing - skip creation to avoid conflicts
+            self.logger.warning("Brick texture node definition exists but implementation is missing - skipping to avoid conflicts")
             return
         
         # Node Definition
@@ -155,15 +189,16 @@ class CustomNodeDefinitionManager:
         """Add custom RGB Curves node definition and implementation."""
         
         # Check if the node definition already exists
-        existing_nodedef = self.document.getNodeDef("ND_curvelookup")
-        existing_impl = self.document.getNodeGraph("IM_curvelookup")
-        
+        existing_nodedef, existing_impl = self._check_existing_definition("curvelookup", "")
         if existing_nodedef and existing_impl:
-            self.logger.info("Curve lookup node definition and implementation already exist, skipping creation")
             self.custom_node_defs["curvelookup"] = {
                 "nodedef": existing_nodedef,
                 "implementation": existing_impl
             }
+            return
+        elif existing_nodedef and not existing_impl:
+            # Node definition exists but implementation is missing - skip creation to avoid conflicts
+            self.logger.warning("Curve lookup node definition exists but implementation is missing - skipping to avoid conflicts")
             return
         
         # Node Definition
@@ -243,14 +278,16 @@ class CustomNodeDefinitionManager:
         """Add custom Vector3 to Vector2 conversion node definition."""
         
         # Check if already exists
-        existing_nodedef = self.document.getNodeDef("ND_convert_vector3_to_vector2_vector2")
-        existing_impl = self.document.getNodeGraph("IM_convert_vector3_to_vector2_vector2")
-        
+        existing_nodedef, existing_impl = self._check_existing_definition("convert_vector3_to_vector2", "vector2")
         if existing_nodedef and existing_impl:
             self.custom_node_defs["convert_vector3_to_vector2"] = {
                 "nodedef": existing_nodedef,
                 "implementation": existing_impl
             }
+            return
+        elif existing_nodedef and not existing_impl:
+            # Node definition exists but implementation is missing - skip creation to avoid conflicts
+            self.logger.warning("Vector3 to vector2 conversion node definition exists but implementation is missing - skipping to avoid conflicts")
             return
         
         # Node Definition - FIXED: use proper naming convention
@@ -315,12 +352,16 @@ class CustomNodeDefinitionManager:
         """Add custom Vector2 to Vector3 conversion node definition."""
         
         # Check if already exists
-        existing_nodedef = self.document.getNodeDef("ND_convert_vector2_to_vector3_vector3")
-        if existing_nodedef:
+        existing_nodedef, existing_impl = self._check_existing_definition("convert_vector2_to_vector3", "vector3")
+        if existing_nodedef and existing_impl:
             self.custom_node_defs["convert_vector2_to_vector3"] = {
                 "nodedef": existing_nodedef,
-                "implementation": self.document.getNodeGraph("IM_convert_vector2_to_vector3_vector3")
+                "implementation": existing_impl
             }
+            return
+        elif existing_nodedef and not existing_impl:
+            # Node definition exists but implementation is missing - skip creation to avoid conflicts
+            self.logger.warning("Vector2 to vector3 conversion node definition exists but implementation is missing - skipping to avoid conflicts")
             return
         
         # Node Definition - FIXED: use proper naming convention
@@ -394,12 +435,16 @@ class CustomNodeDefinitionManager:
         """Add custom Color3 to Vector2 conversion node definition."""
         
         # Check if already exists
-        existing_nodedef = self.document.getNodeDef("ND_convert_color3_to_vector2_vector2")
-        if existing_nodedef:
+        existing_nodedef, existing_impl = self._check_existing_definition("convert_color3_to_vector2", "vector2")
+        if existing_nodedef and existing_impl:
             self.custom_node_defs["convert_color3_to_vector2"] = {
                 "nodedef": existing_nodedef,
-                "implementation": self.document.getNodeGraph("IM_convert_color3_to_vector2_vector2")
+                "implementation": existing_impl
             }
+            return
+        elif existing_nodedef and not existing_impl:
+            # Node definition exists but implementation is missing - skip creation to avoid conflicts
+            self.logger.warning("Color3 to vector2 conversion node definition exists but implementation is missing - skipping to avoid conflicts")
             return
         
         # Node Definition - FIXED: use proper naming convention
@@ -464,11 +509,11 @@ class CustomNodeDefinitionManager:
         """Add custom Vector4 to Vector3 conversion node definition."""
         
         # Check if already exists
-        existing_nodedef = self.document.getNodeDef("ND_convert_vector4_to_vector3_vector3")
-        if existing_nodedef:
+        existing_nodedef, existing_impl = self._check_existing_definition("convert_vector4_to_vector3", "vector3")
+        if existing_nodedef and existing_impl:
             self.custom_node_defs["convert_vector4_to_vector3"] = {
                 "nodedef": existing_nodedef,
-                "implementation": self.document.getNodeGraph("IM_convert_vector4_to_vector3_vector3")
+                "implementation": existing_impl
             }
             return
         
@@ -537,12 +582,16 @@ class CustomNodeDefinitionManager:
         """Add custom Color4 to Color3 conversion node definition."""
         
         # Check if already exists
-        existing_nodedef = self.document.getNodeDef("ND_convert_color4_to_color3_color3")
-        if existing_nodedef:
+        existing_nodedef, existing_impl = self._check_existing_definition("convert_color4_to_color3", "color3")
+        if existing_nodedef and existing_impl:
             self.custom_node_defs["convert_color4_to_color3"] = {
                 "nodedef": existing_nodedef,
-                "implementation": self.document.getNodeGraph("IM_convert_color4_to_color3_color3")
+                "implementation": existing_impl
             }
+            return
+        elif existing_nodedef and not existing_impl:
+            # Node definition exists but implementation is missing - skip creation to avoid conflicts
+            self.logger.warning("Color4 to color3 conversion node definition exists but implementation is missing - skipping to avoid conflicts")
             return
         
         # Node Definition - FIXED: use proper naming convention
@@ -603,12 +652,16 @@ class CustomNodeDefinitionManager:
         """Add custom Vector3 to Vector4 conversion node definition."""
         
         # Check if already exists
-        existing_nodedef = self.document.getNodeDef("ND_convert_vector3_to_vector4_vector4")
-        if existing_nodedef:
+        existing_nodedef, existing_impl = self._check_existing_definition("convert_vector3_to_vector4", "vector4")
+        if existing_nodedef and existing_impl:
             self.custom_node_defs["convert_vector3_to_vector4"] = {
                 "nodedef": existing_nodedef,
-                "implementation": self.document.getNodeGraph("IM_convert_vector3_to_vector4_vector4")
+                "implementation": existing_impl
             }
+            return
+        elif existing_nodedef and not existing_impl:
+            # Node definition exists but implementation is missing - skip creation to avoid conflicts
+            self.logger.warning("Vector3 to vector4 conversion node definition exists but implementation is missing - skipping to avoid conflicts")
             return
         
         # Node Definition
@@ -685,11 +738,11 @@ class CustomNodeDefinitionManager:
         """Add custom Color3 to Color4 conversion node definition."""
         
         # Check if already exists
-        existing_nodedef = self.document.getNodeDef("ND_convert_color3_to_color4_color4")
-        if existing_nodedef:
+        existing_nodedef, existing_impl = self._check_existing_definition("convert_color3_to_color4", "color4")
+        if existing_nodedef and existing_impl:
             self.custom_node_defs["convert_color3_to_color4"] = {
                 "nodedef": existing_nodedef,
-                "implementation": self.document.getNodeGraph("IM_convert_color3_to_color4_color4")
+                "implementation": existing_impl
             }
             return
         
@@ -864,6 +917,80 @@ class CustomNodeDefinitionManager:
         
         self.logger.debug("Created Brick Texture implementation nodegraph")
     
+    def _add_voronoi_texture_definition(self):
+        """Add Voronoi Texture node definition and implementation."""
+        
+        # Check if the node definition already exists
+        existing_nodedef, existing_impl = self._check_existing_definition("voronoi", "")
+        if existing_nodedef and existing_impl:
+            self.custom_node_defs["voronoi"] = {
+                "nodedef": existing_nodedef,
+                "implementation": existing_impl
+            }
+            return
+        elif existing_nodedef and not existing_impl:
+            # Node definition exists but implementation is missing - skip creation to avoid conflicts
+            self.logger.warning("Voronoi texture node definition exists but implementation is missing - skipping to avoid conflicts")
+            return
+        
+        # Node Definition
+        nodedef = self.document.addNodeDef("ND_voronoi", "color3", "voronoi")
+        nodedef.setNodeGroup("texture")
+        nodedef.setAttribute("version", "1.0")
+        nodedef.setAttribute("description", "Voronoi texture pattern")
+        
+        # Inputs
+        input_elem = nodedef.addInput("position", "vector2")
+        input_elem.setAttribute("description", "Texture coordinates")
+        
+        # Output
+        output = nodedef.addOutput("out", "color3")
+        output.setAttribute("description", "Voronoi texture output")
+        
+        # Implementation NodeGraph
+        impl = self.document.addNodeGraph("IM_voronoi")
+        impl.setAttribute("description", "Voronoi texture implementation")
+        
+        # Create the implementation
+        self._create_voronoi_texture_implementation(impl)
+        
+        # Link implementation to node definition
+        nodedef.setAttribute("implname", "IM_voronoi")
+        
+        # Store for later use
+        self.custom_node_defs["voronoi"] = {
+            "nodedef": nodedef,
+            "implementation": impl
+        }
+        
+        self.logger.info("Added Voronoi texture node definition")
+
+    def _create_voronoi_texture_implementation(self, nodegraph: mx.NodeGraph):
+        """Create the nodegraph implementation for voronoi texture."""
+        
+        # For now, create a simple implementation using noise as a placeholder
+        # In a real implementation, this would use proper voronoi cell calculation
+        
+        # Input node
+        input_node = nodegraph.addNode("position", "voronoi_input")
+        input_node.setType("vector2")
+        
+        # Connect input
+        input_input = input_node.addInput("in", "vector2")
+        input_input.setNodeName("position")
+        
+        # Use noise as a simple voronoi approximation
+        noise_node = nodegraph.addNode("fractal3d", "voronoi_noise")
+        noise_node.setType("color3")
+        
+        # Connect position to noise
+        noise_input = noise_node.addInput("position", "vector2")
+        noise_input.setNodeName("voronoi_input.out")
+        
+        # Output
+        output = nodegraph.addOutput("out", "color3")
+        output.setNodeName("voronoi_noise.out")
+    
     def get_custom_node_definition(self, node_type: str) -> Optional[mx.NodeDef]:
         """Get a custom node definition by type."""
         if node_type in self.custom_node_defs:
@@ -913,10 +1040,16 @@ BLENDER_CUSTOM_NODE_TYPES = {
 
 
 def get_custom_node_type(blender_node_type: str) -> Optional[str]:
-    """Get the custom MaterialX node type for a Blender node type."""
-    return BLENDER_CUSTOM_NODE_TYPES.get(blender_node_type)
+    """Get the MaterialX node type for a Blender node type."""
+    custom_mapping = {
+        'TEX_BRICK': 'brick_texture',
+        'CURVE_RGB': 'curvelookup',
+        'TEX_VORONOI': 'voronoi'
+    }
+    return custom_mapping.get(blender_node_type)
 
 
 def is_custom_node_type(blender_node_type: str) -> bool:
-    """Check if a Blender node type requires a custom definition."""
-    return blender_node_type in BLENDER_CUSTOM_NODE_TYPES
+    """Check if a Blender node type is a custom node type."""
+    custom_types = {'TEX_BRICK', 'CURVE_RGB', 'TEX_VORONOI'}
+    return blender_node_type in custom_types
