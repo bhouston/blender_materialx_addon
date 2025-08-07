@@ -1327,28 +1327,47 @@ class MaterialXNodeBuilder:
             
         Returns:
             bool: True if connection successful
+            
+        Raises:
+            MaterialXError: If connection fails for any reason
         """
         try:
             # Validate that nodes exist
-            if not from_node or not to_node:
-                self.logger.warning(f"Invalid nodes for connection: {from_node} -> {to_node}")
-                return False
+            if not from_node:
+                raise MaterialXError(f"Source node is None for connection to {to_node.getName()}.{to_input}", "invalid_source_node")
+            
+            if not to_node:
+                raise MaterialXError(f"Target node is None for connection from {from_node.getName()}.{from_output}", "invalid_target_node")
+            
+            # Validate output and input names
+            if not from_output:
+                raise MaterialXError(f"Source output name is empty for node {from_node.getName()}", "invalid_output_name")
+            
+            if not to_input:
+                raise MaterialXError(f"Target input name is empty for node {to_node.getName()}", "invalid_input_name")
             
             # Get output and input types for validation
             from_type = self._get_node_output_type(from_node, from_output)
             to_type = self._get_node_input_type(to_node, to_input)
             
+            self.logger.debug(f"Attempting connection: {from_node.getName()}.{from_output} ({from_type}) -> {to_node.getName()}.{to_input} ({to_type})")
+            
             # Check type compatibility
             if self.type_converter.validate_type_compatibility(from_type, to_type):
+                self.logger.debug(f"Types compatible, direct connection: {from_type} -> {to_type}")
                 return self._direct_connect_nodes(from_node, from_output, to_node, to_input)
             else:
                 # Types are incompatible, need conversion
                 self.logger.debug(f"Type mismatch detected: {from_type} -> {to_type}, attempting conversion")
                 return self._connect_with_conversion(from_node, from_output, to_node, to_input, from_type, to_type)
             
+        except MaterialXError:
+            # Re-raise MaterialXError exceptions
+            raise
         except Exception as e:
-            self.logger.error(f"Error connecting nodes: {str(e)}")
-            return False
+            error_msg = f"Unexpected error connecting {from_node.getName() if from_node else 'None'}.{from_output} -> {to_node.getName() if to_node else 'None'}.{to_input}: {str(e)}"
+            self.logger.error(error_msg)
+            raise MaterialXError(error_msg, "connection_exception", {"original_error": str(e)})
     
     def _get_node_output_type(self, node: mx.Node, output_name: str) -> str:
         """Get the output type of a node."""
@@ -1392,23 +1411,42 @@ class MaterialXNodeBuilder:
                              to_node: mx.Node, to_input: str) -> bool:
         """Directly connect two nodes without type conversion."""
         try:
+            # Validate that the source node has the specified output
+            if from_output and from_output != 'out':
+                # Check if the output exists on the source node
+                output_def = from_node.getActiveOutput(from_output)
+                if not output_def:
+                    # Try to get from node definition
+                    node_def = from_node.getNodeDef()
+                    if node_def:
+                        output_def = node_def.getOutput(from_output)
+                
+                if not output_def:
+                    raise MaterialXError(f"Output '{from_output}' not found on node '{from_node.getName()}'", "missing_output")
+            
             # Create input if it doesn't exist
             input_port = to_node.addInputFromNodeDef(to_input)
-            if input_port:
-                # Remove any existing value
-                input_port.removeAttribute('value')
-                # Set the connection
-                input_port.setAttribute('nodename', from_node.getName())
-                if from_output and from_output != 'out':
-                    input_port.setOutputString(from_output)
-                self.logger.debug(f"Direct connection successful: {from_node.getName()}.{from_output} -> {to_node.getName()}.{to_input}")
-                return True
-            else:
-                self.logger.warning(f"Failed to create input port: {to_node.getName()}.{to_input}")
-                return False
+            if not input_port:
+                raise MaterialXError(f"Failed to create input port '{to_input}' on node '{to_node.getName()}'", "input_creation_failed")
+            
+            # Remove any existing value
+            input_port.removeAttribute('value')
+            
+            # Set the connection
+            input_port.setAttribute('nodename', from_node.getName())
+            if from_output and from_output != 'out':
+                input_port.setOutputString(from_output)
+            
+            self.logger.debug(f"✓ Direct connection successful: {from_node.getName()}.{from_output} -> {to_node.getName()}.{to_input}")
+            return True
+            
+        except MaterialXError:
+            # Re-raise MaterialXError exceptions
+            raise
         except Exception as e:
-            self.logger.error(f"Direct connection failed: {e}")
-            return False
+            error_msg = f"Direct connection failed: {from_node.getName()}.{from_output} -> {to_node.getName()}.{to_input} - {str(e)}"
+            self.logger.error(error_msg)
+            raise MaterialXError(error_msg, "direct_connection_exception", {"original_error": str(e)})
     
     def _connect_with_conversion(self, from_node: mx.Node, from_output: str, 
                                 to_node: mx.Node, to_input: str, from_type: str, to_type: str) -> bool:
@@ -1417,25 +1455,55 @@ class MaterialXNodeBuilder:
             # Create conversion node
             conversion_node = self._create_conversion_node(from_type, to_type, from_node.getParent())
             if not conversion_node:
-                self.logger.warning(f"Failed to create conversion node for {from_type} -> {to_type}")
-                return False
+                raise MaterialXError(f"Failed to create conversion node for {from_type} -> {to_type}", "conversion_node_creation_failed")
+            
+            # Determine the correct input and output names for the conversion node
+            conversion_input, conversion_output = self._get_conversion_node_ports(from_type, to_type)
+            
+            self.logger.debug(f"Using conversion node '{conversion_node.getName()}' with ports: {conversion_input} -> {conversion_output}")
             
             # Connect source to conversion node
-            if not self._direct_connect_nodes(from_node, from_output, conversion_node, 'in'):
-                self.logger.warning(f"Failed to connect source to conversion node")
-                return False
+            try:
+                self._direct_connect_nodes(from_node, from_output, conversion_node, conversion_input)
+            except MaterialXError as e:
+                raise MaterialXError(f"Failed to connect source to conversion node: {str(e)}", "source_to_conversion_failed", {"original_error": str(e)})
             
             # Connect conversion node to target
-            if not self._direct_connect_nodes(conversion_node, 'out', to_node, to_input):
-                self.logger.warning(f"Failed to connect conversion node to target")
-                return False
+            try:
+                self._direct_connect_nodes(conversion_node, conversion_output, to_node, to_input)
+            except MaterialXError as e:
+                raise MaterialXError(f"Failed to connect conversion node to target: {str(e)}", "conversion_to_target_failed", {"original_error": str(e)})
             
-            self.logger.debug(f"Conversion connection successful: {from_node.getName()}.{from_output} -> [convert] -> {to_node.getName()}.{to_input}")
+            self.logger.debug(f"✓ Conversion connection successful: {from_node.getName()}.{from_output} -> [{conversion_node.getName()}] -> {to_node.getName()}.{to_input}")
             return True
             
+        except MaterialXError:
+            # Re-raise MaterialXError exceptions
+            raise
         except Exception as e:
-            self.logger.error(f"Conversion connection failed: {e}")
-            return False
+            error_msg = f"Conversion connection failed: {from_node.getName()}.{from_output} -> {to_node.getName()}.{to_input} - {str(e)}"
+            self.logger.error(error_msg)
+            raise MaterialXError(error_msg, "conversion_connection_exception", {"original_error": str(e)})
+    
+    def _get_conversion_node_ports(self, from_type: str, to_type: str) -> Tuple[str, str]:
+        """Get the correct input and output port names for conversion nodes."""
+        if from_type == 'color3' and to_type == 'float':
+            # separate3 node: input 'in', output 'outr' (red component)
+            return 'in', 'outr'
+        elif from_type == 'color3' and to_type == 'vector2':
+            # separate3 node: input 'in', outputs 'outr', 'outg', 'outb'
+            # For now, use 'in' and 'outr' as a simple approach
+            return 'in', 'outr'
+        elif from_type == 'vector2' and to_type == 'vector3':
+            # combine3 node: inputs 'in1', 'in2', 'in3', output 'out'
+            # For now, use 'in1' and 'out' as a simple approach
+            return 'in1', 'out'
+        elif from_type == 'color3' and to_type == 'vector3':
+            # combine3 node: inputs 'in1', 'in2', 'in3', output 'out'
+            return 'in1', 'out'
+        else:
+            # Default fallback
+            return 'in', 'out'
     
     def _create_conversion_node(self, from_type: str, to_type: str, parent: mx.Element) -> Optional[mx.Node]:
         """Create appropriate conversion node based on type transformation needed."""
@@ -1444,45 +1512,58 @@ class MaterialXNodeBuilder:
             conversion_name = f"convert_{from_type}_to_{to_type}_{id(self)}"
             conversion_name = parent.createValidChildName(conversion_name)
             
-            # Create conversion node based on type transformation
+            # Create conversion node based on type transformation using proper MaterialX nodes
             if from_type == 'vector2' and to_type == 'vector3':
-                # vector2 -> vector3: add Z=0 (texcoord -> fractal3d position)
-                conversion_node = parent.addChildOfCategory('convert', conversion_name)
+                # vector2 -> vector3: use combine3 node to add Z=0
+                conversion_node = parent.addChildOfCategory('combine3', conversion_name)
                 conversion_node.setType('vector3')
-                # Add input and output ports
-                input_port = conversion_node.addInput('in', 'vector2')
-                output_port = conversion_node.addOutput('out', 'vector3')
-                # Set up the conversion logic: [x, y] -> [x, y, 0]
-                # This would typically use a MaterialX node that can handle this transformation
-                self.logger.debug(f"Created vector2->vector3 conversion node: {conversion_name}")
+                # The combine3 node will take the vector2 input and add a Z component
+                self.logger.debug(f"Created vector2->vector3 conversion using combine3: {conversion_name}")
                 
             elif from_type == 'color3' and to_type == 'vector2':
-                # color3 -> vector2: extract first two components (mix -> ramp texcoord)
-                conversion_node = parent.addChildOfCategory('convert', conversion_name)
+                # color3 -> vector2: use separate3 node to extract first two components
+                conversion_node = parent.addChildOfCategory('separate3', conversion_name)
                 conversion_node.setType('vector2')
-                # Add input and output ports
-                input_port = conversion_node.addInput('in', 'color3')
-                output_port = conversion_node.addOutput('out', 'vector2')
-                # Set up the conversion logic: [r, g, b] -> [r, g]
-                self.logger.debug(f"Created color3->vector2 conversion node: {conversion_name}")
+                # The separate3 node will extract R and G components
+                self.logger.debug(f"Created color3->vector2 conversion using separate3: {conversion_name}")
                 
             elif from_type == 'color3' and to_type == 'vector3':
-                # color3 -> vector3: direct conversion (mix -> normalmap default)
-                conversion_node = parent.addChildOfCategory('convert', conversion_name)
+                # color3 -> vector3: direct conversion, use the color3 as vector3
+                conversion_node = parent.addChildOfCategory('combine3', conversion_name)
                 conversion_node.setType('vector3')
-                # Add input and output ports
-                input_port = conversion_node.addInput('in', 'color3')
-                output_port = conversion_node.addOutput('out', 'vector3')
-                # Set up the conversion logic: [r, g, b] -> [r, g, b]
-                self.logger.debug(f"Created color3->vector3 conversion node: {conversion_name}")
+                # The combine3 node will combine the RGB components as XYZ
+                self.logger.debug(f"Created color3->vector3 conversion using combine3: {conversion_name}")
+                
+            elif from_type == 'color3' and to_type == 'float':
+                # color3 -> float: use separate3 node to extract red component
+                conversion_node = parent.addChildOfCategory('separate3', conversion_name)
+                conversion_node.setType('float')
+                # Set the proper node definition for separate3
+                conversion_node.setNodeDefString('ND_separate3_float')
+                # The separate3 node extracts components from color3
+                self.logger.debug(f"Created color3->float conversion using separate3: {conversion_name}")
+                
+            elif from_type == 'vector3' and to_type == 'color3':
+                # vector3 -> color3: direct conversion, use the vector3 as color3
+                conversion_node = parent.addChildOfCategory('combine3', conversion_name)
+                conversion_node.setType('color3')
+                # The combine3 node will combine the XYZ components as RGB
+                self.logger.debug(f"Created vector3->color3 conversion using combine3: {conversion_name}")
                 
             else:
-                # Generic conversion node
-                conversion_node = parent.addChildOfCategory('convert', conversion_name)
-                conversion_node.setType(to_type)
-                # Add input and output ports
-                input_port = conversion_node.addInput('in', from_type)
-                output_port = conversion_node.addOutput('out', to_type)
+                # For other conversions, try to use a generic approach
+                # Use separate3 for extracting components or combine3 for combining
+                if 'vector' in from_type and 'color' in to_type:
+                    conversion_node = parent.addChildOfCategory('combine3', conversion_name)
+                    conversion_node.setType(to_type)
+                elif 'color' in from_type and 'vector' in to_type:
+                    conversion_node = parent.addChildOfCategory('separate3', conversion_name)
+                    conversion_node.setType(to_type)
+                else:
+                    # Fallback: try to create a simple pass-through
+                    conversion_node = parent.addChildOfCategory('constant', conversion_name)
+                    conversion_node.setType(to_type)
+                
                 self.logger.debug(f"Created generic conversion node {from_type}->{to_type}: {conversion_name}")
             
             return conversion_node
@@ -1838,24 +1919,57 @@ class MaterialXLibraryBuilder:
     
     def add_connection(self, from_node: str, from_output: str, to_node: str, to_input: str):
         """
-        Add a connection between nodes.
+        Add a connection between nodes with robust error handling.
         
         Args:
             from_node: Source node name
             from_output: Source output name
             to_node: Target node name
             to_input: Target input name
+            
+        Raises:
+            MaterialXError: If connection fails for any reason
         """
+        # Validate input parameters
+        if not from_node or not from_output or not to_node or not to_input:
+            error_msg = f"Invalid connection parameters: from_node='{from_node}', from_output='{from_output}', to_node='{to_node}', to_input='{to_input}'"
+            self.logger.error(error_msg)
+            raise MaterialXError(error_msg, "connection_validation")
+        
+        # Check if nodes exist
         from_node_elem = self.nodes.get(from_node)
         to_node_elem = self.nodes.get(to_node)
         
-        if from_node_elem and to_node_elem:
+        if not from_node_elem:
+            error_msg = f"Source node '{from_node}' not found. Available nodes: {list(self.nodes.keys())}"
+            self.logger.error(error_msg)
+            raise MaterialXError(error_msg, "missing_source_node")
+        
+        if not to_node_elem:
+            error_msg = f"Target node '{to_node}' not found. Available nodes: {list(self.nodes.keys())}"
+            self.logger.error(error_msg)
+            raise MaterialXError(error_msg, "missing_target_node")
+        
+        # Attempt the connection
+        try:
             success = self.node_builder.connect_nodes(from_node_elem, from_output, to_node_elem, to_input)
+            
             if success:
+                # Record successful connection
                 self.connection_manager.record_connection(from_node, from_output, to_node, to_input)
                 self.connections.append((from_node, from_output, to_node, to_input))
-        else:
-            self.logger.warning(f"Connection failed: {from_node}.{from_output} -> {to_node}.{to_input}")
+                self.logger.debug(f"✓ Connection successful: {from_node}.{from_output} -> {to_node}.{to_input}")
+            else:
+                # Connection failed but didn't raise an exception
+                error_msg = f"Connection failed silently: {from_node}.{from_output} -> {to_node}.{to_input}"
+                self.logger.error(error_msg)
+                raise MaterialXError(error_msg, "connection_failed")
+                
+        except Exception as e:
+            # Connection failed with an exception
+            error_msg = f"Connection failed with exception: {from_node}.{from_output} -> {to_node}.{to_input} - {str(e)}"
+            self.logger.error(error_msg)
+            raise MaterialXError(error_msg, "connection_exception", {"original_error": str(e)})
     
     def add_surface_shader_input(self, surface_node_name: str, input_name: str, input_type: str, 
                                 nodegraph_name: str = None, nodename: str = None, value: str = None):

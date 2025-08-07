@@ -232,6 +232,15 @@ NODE_SCHEMAS = {
         {'blender': 'A', 'mtlx': 'in1', 'type': 'vector3', 'category': 'vector3'},
         {'blender': 'B', 'mtlx': 'in2', 'type': 'vector3', 'category': 'vector3'},
     ],
+    'MATH': {
+        'inputs': {
+            0: 'in1',  # First input (A)
+            1: 'in2',  # Second input (B)
+        },
+        'outputs': {
+            'Value': 'out'
+        }
+    },
     'NOISE_TEXTURE': [
         {'blender': 'Vector', 'mtlx': 'texcoord', 'type': 'vector3', 'category': 'color3'},
         {'blender': 'Scale', 'mtlx': 'scale', 'type': 'float', 'category': 'color3'},
@@ -1451,24 +1460,60 @@ class NodeMapper:
                         mtlx_source_type = blender_to_mtlx_type.get(source_node_type, 'constant')
                         output_name = builder.get_node_output_name(mtlx_source_type)
                         
-                        builder.add_connection(value_or_node, output_name, node_name, mtlx_param)
+                        # Handle type conversion for specific cases
+                        if source_node_type == 'TEX_NOISE' and mtlx_operation in ['modulo', 'ifgreater']:
+                            # Noise texture outputs color3, but modulo/ifgreater expect float
+                            # Create a luminance node to convert color3 to float
+                            luminance_node_name = f"luminance_{value_or_node}"
+                            
+                            # Use the enhanced type conversion system but with proper error handling
+                            try:
+                                # Create the luminance node
+                                luminance_node = builder.add_node('luminance', luminance_node_name, 'float')
+                                
+                                # Connect noise to luminance
+                                builder.add_connection(value_or_node, 'out', luminance_node_name, 'in')
+                                
+                                # Connect luminance to math node
+                                builder.add_connection(luminance_node_name, 'out', node_name, mtlx_param)
+                                
+                                builder.logger.info(f"Created luminance conversion: {value_or_node} -> {luminance_node_name} -> {node_name}")
+                            except Exception as e:
+                                builder.logger.warning(f"Luminance conversion failed: {e}")
+                                # Fallback to direct connection
+                                builder.add_connection(value_or_node, output_name, node_name, mtlx_param)
+                        else:
+                            # Normal connection
+                            builder.add_connection(value_or_node, output_name, node_name, mtlx_param)
                     else:
                         # Set default value using type-safe method
                         # For ifgreater nodes, we need to handle in3 and in4 parameters
                         if mtlx_operation == 'ifgreater':
-                            if mtlx_param == 'in3':
+                            if mtlx_param == 'in1':
+                                default_value = 0.0  # comparison value
+                            elif mtlx_param == 'in2':
+                                default_value = 0.5  # threshold
+                            elif mtlx_param == 'in3':
                                 default_value = 1.0  # true value
                             elif mtlx_param == 'in4':
                                 default_value = 0.0  # false value
                             else:
                                 default_value = 0.0
                         elif mtlx_operation == 'modulo':
-                            if mtlx_param == 'in2':
+                            if mtlx_param == 'in1':
+                                default_value = 0.0  # value to modulo
+                            elif mtlx_param == 'in2':
                                 default_value = 2.0  # modulo by 2
                             else:
                                 default_value = 0.0
                         else:
-                            default_value = 0.0 if blender_input == 0 else 0.0
+                            # For other operations, set reasonable defaults
+                            if mtlx_param == 'in1':
+                                default_value = 0.0
+                            elif mtlx_param == 'in2':
+                                default_value = 1.0
+                            else:
+                                default_value = 0.0
                         
                         builder.library_builder.node_builder.create_mtlx_input(
                             builder.nodes[node_name], mtlx_param, 
@@ -1476,7 +1521,8 @@ class NodeMapper:
                             node_type=mtlx_operation, category='float'
                         )
                         
-                except (KeyError, AttributeError):
+                except (KeyError, AttributeError) as e:
+                    builder.logger.warning(f"Failed to process input {blender_input} for math node {node.name}: {e}")
                     continue
         
         return node_name
@@ -1514,7 +1560,89 @@ class NodeMapper:
     @staticmethod
     def map_noise_texture_enhanced(node, builder: MaterialXBuilder, input_nodes: Dict, input_nodes_by_index: Dict = None, blender_node=None, constant_manager=None, exported_nodes=None) -> str:
         """Enhanced noise texture mapping with type-safe input creation."""
-        return map_node_with_schema_enhanced(node, builder, NODE_SCHEMAS['NOISE_TEXTURE'], 'fractal3d', 'color3', constant_manager, exported_nodes)
+        # Create the fractal3d node
+        node_name = builder.add_node('fractal3d', f"fractal3d_{node.name}", 'color3')
+        
+        # Handle inputs with type conversion
+        for input_def in NODE_SCHEMAS['NOISE_TEXTURE']:
+            try:
+                blender_input = input_def['blender']
+                mtlx_param = input_def['mtlx']
+                expected_type = input_def['type']
+                
+                # Get input value or connection
+                if isinstance(blender_input, int):
+                    input_socket = node.inputs[blender_input]
+                    if input_socket.is_linked and input_socket.links:
+                        from_node = input_socket.links[0].from_node
+                        if exported_nodes is not None and from_node in exported_nodes:
+                            is_connected, value_or_node, type_str = True, exported_nodes[from_node], str(input_socket.type)
+                        else:
+                            is_connected, value_or_node, type_str = True, from_node.name, str(input_socket.type)
+                    else:
+                        is_connected, value_or_node, type_str = False, input_socket.default_value, str(input_socket.type)
+                else:
+                    is_connected, value_or_node, type_str = get_input_value_or_connection(node, blender_input, exported_nodes)
+                
+                if is_connected:
+                    # Handle vector2 to vector3 conversion for position input
+                    if mtlx_param == 'texcoord' and type_str == 'VECTOR':
+                        # Create a combine3 node to convert vector2 to vector3
+                        combine_node_name = f"combine_{value_or_node}_to_vector3"
+                        combine_node = builder.add_node('combine3', combine_node_name, 'vector3')
+                        
+                        # Use direct MaterialX library calls to bypass enhanced type conversion
+                        try:
+                            # Get the MaterialX nodes
+                            from_node = builder.nodes.get(value_or_node)
+                            to_node = builder.nodes.get(combine_node_name)
+                            fractal_node = builder.nodes.get(node_name)
+                            
+                            if from_node and to_node and fractal_node:
+                                # Create input directly on the combine3 node
+                                input_port = to_node.addInput('in1', 'vector2')
+                                input_port.setConnectedNode(from_node)
+                                
+                                # Create input directly on the fractal3d node
+                                position_input = fractal_node.addInput('position', 'vector3')
+                                position_input.setConnectedNode(to_node)
+                                
+                                builder.logger.info(f"Created vector2->vector3 conversion: {value_or_node} -> {combine_node_name} -> {node_name}.position")
+                            else:
+                                builder.logger.warning(f"Failed to find nodes for direct connection")
+                                # Fallback to normal connection
+                                builder.add_connection(value_or_node, 'out', node_name, 'position')
+                        except Exception as e:
+                            builder.logger.warning(f"Direct connection failed: {e}")
+                            # Fallback to normal connection
+                            builder.add_connection(value_or_node, 'out', node_name, 'position')
+                    else:
+                        # Normal connection
+                        builder.add_connection(value_or_node, 'out', node_name, mtlx_param)
+                else:
+                    # Set default values
+                    if mtlx_param == 'texcoord':
+                        default_value = [0, 0, 0]  # vector3 default
+                    elif mtlx_param == 'scale':
+                        default_value = 10.0
+                    elif mtlx_param == 'detail':
+                        default_value = [2, 2, 2]  # color3 default
+                    elif mtlx_param == 'roughness':
+                        default_value = [0.5, 0.5, 0.5]  # color3 default
+                    else:
+                        default_value = 0.0
+                    
+                    builder.library_builder.node_builder.create_mtlx_input(
+                        builder.nodes[node_name], mtlx_param, 
+                        value=default_value,
+                        node_type='fractal3d', category='color3'
+                    )
+                    
+            except (KeyError, AttributeError) as e:
+                builder.logger.warning(f"Failed to process input {blender_input} for noise texture node {node.name}: {e}")
+                continue
+        
+        return node_name
     
     @staticmethod
     def map_wave_texture_enhanced(node, builder: MaterialXBuilder, input_nodes: Dict, input_nodes_by_index: Dict = None, blender_node=None, constant_manager=None, exported_nodes=None) -> str:
