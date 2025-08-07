@@ -494,6 +494,241 @@ def create_light_path_material():
     
     return material
 
+# New functions to replicate official MaterialX reference files
+
+def create_mtlx_gold_material():
+    """Create a gold material that replicates standard_surface_gold.mtlx."""
+    material = bpy.data.materials.new(name="MTLX_Gold")
+    material.use_nodes = True
+    nodes = material.node_tree.nodes
+    links = material.node_tree.links
+    
+    # Clear default nodes
+    nodes.clear()
+    
+    # Create Principled BSDF with exact values from the MTX file
+    principled = nodes.new(type='ShaderNodeBsdfPrincipled')
+    principled.location = (0, 0)
+    # base = 1.0 (default)
+    principled.inputs['Base Color'].default_value = (0.944, 0.776, 0.373, 1.0)  # base_color
+    # Note: Blender doesn't have separate 'Specular' input, it's built into the shader
+    principled.inputs['Roughness'].default_value = 0.02  # specular_roughness
+    principled.inputs['Metallic'].default_value = 1.0  # metalness
+    
+    # Create Material Output
+    output = nodes.new(type='ShaderNodeOutputMaterial')
+    output.location = (300, 0)
+    
+    # Connect
+    links.new(principled.outputs['BSDF'], output.inputs['Surface'])
+    
+    return material
+
+def create_mtlx_glass_material():
+    """Create a glass material that replicates standard_surface_glass.mtlx."""
+    material = bpy.data.materials.new(name="MTLX_Glass")
+    material.use_nodes = True
+    nodes = material.node_tree.nodes
+    links = material.node_tree.links
+    
+    # Clear default nodes
+    nodes.clear()
+    
+    # Create Principled BSDF with exact values from the MTX file
+    principled = nodes.new(type='ShaderNodeBsdfPrincipled')
+    principled.location = (0, 0)
+    # Note: Blender doesn't have separate 'Base' input, it's controlled by base_color
+    principled.inputs['Base Color'].default_value = (0.0, 0.0, 0.0, 1.0)  # base = 0.0 (black)
+    # Note: Blender doesn't have separate 'Specular' input, it's built into the shader
+    principled.inputs['Roughness'].default_value = 0.01  # specular_roughness
+    principled.inputs['IOR'].default_value = 1.52  # specular_IOR
+    principled.inputs['Transmission Weight'].default_value = 1.0  # transmission
+    # Note: Blender doesn't have separate transmission color/depth/scatter inputs
+    # These are handled internally by the Principled BSDF
+    principled.inputs['Alpha'].default_value = 1.0  # opacity (note: Blender uses Alpha, MTX uses opacity)
+    
+    # Create Material Output
+    output = nodes.new(type='ShaderNodeOutputMaterial')
+    output.location = (300, 0)
+    
+    # Connect
+    links.new(principled.outputs['BSDF'], output.inputs['Surface'])
+    
+    # Enable transparency
+    material.blend_method = 'BLEND'
+    
+    return material
+
+def create_mtlx_checkerboard_material():
+    """Create a checkerboard material that replicates checkerboard_test.mtlx."""
+    material = bpy.data.materials.new(name="MTLX_Checkerboard")
+    material.use_nodes = True
+    nodes = material.node_tree.nodes
+    links = material.node_tree.links
+    
+    # Clear default nodes
+    nodes.clear()
+    
+    # Create nodes to replicate the MTX nodegraph more accurately
+    tex_coord = nodes.new(type='ShaderNodeTexCoord')
+    tex_coord.location = (-800, 0)
+    
+    # Use a simpler noise for cell-like pattern (closer to cellnoise3d)
+    cell_noise = nodes.new(type='ShaderNodeTexNoise')
+    cell_noise.location = (-600, 0)
+    cell_noise.inputs['Scale'].default_value = 10.0  # Higher scale for more cell-like pattern
+    cell_noise.noise_dimensions = '2D'
+    cell_noise.inputs['Detail'].default_value = 0.0  # No detail for cell-like appearance
+    
+    # Modulo operation (replicates modulo)
+    modulo = nodes.new(type='ShaderNodeMath')
+    modulo.location = (-400, 0)
+    modulo.operation = 'MODULO'
+    modulo.inputs[1].default_value = 2.0
+    
+    # Greater than operation (replicates ifgreater)
+    greater = nodes.new(type='ShaderNodeMath')
+    greater.location = (-200, 0)
+    greater.operation = 'GREATER_THAN'
+    greater.inputs[1].default_value = 1.0
+    
+    # Mix operation (replicates mix)
+    mix_rgb = nodes.new(type='ShaderNodeMixRGB')
+    mix_rgb.location = (0, 0)
+    mix_rgb.blend_type = 'MIX'
+    mix_rgb.inputs['Color1'].default_value = (1.0, 1.0, 1.0, 1.0)  # white
+    mix_rgb.inputs['Color2'].default_value = (0.0, 0.0, 0.0, 1.0)  # black
+    
+    # Principled BSDF
+    principled = nodes.new(type='ShaderNodeBsdfPrincipled')
+    principled.location = (200, 0)
+    
+    # Material Output
+    output = nodes.new(type='ShaderNodeOutputMaterial')
+    output.location = (400, 0)
+    
+    # Connect - this should create a proper nodegraph that the exporter can handle
+    links.new(tex_coord.outputs['Generated'], cell_noise.inputs['Vector'])
+    links.new(cell_noise.outputs['Fac'], modulo.inputs[0])
+    links.new(modulo.outputs[0], greater.inputs[0])
+    links.new(greater.outputs[0], mix_rgb.inputs['Fac'])
+    links.new(mix_rgb.outputs['Color'], principled.inputs['Base Color'])
+    links.new(principled.outputs['BSDF'], output.inputs['Surface'])
+    
+    return material
+
+def create_mtlx_single_color_material():
+    """Create a single color material that replicates single_color_test.mtlx."""
+    material = bpy.data.materials.new(name="MTLX_SingleColor")
+    material.use_nodes = True
+    nodes = material.node_tree.nodes
+    links = material.node_tree.links
+    
+    # Clear default nodes
+    nodes.clear()
+    
+    # Create RGB node (replicates red_constant)
+    rgb = nodes.new(type='ShaderNodeRGB')
+    rgb.location = (-200, 0)
+    rgb.outputs[0].default_value = (1.0, 0.0, 0.0, 1.0)  # red color
+    
+    # Create Principled BSDF
+    principled = nodes.new(type='ShaderNodeBsdfPrincipled')
+    principled.location = (0, 0)
+    
+    # Create Material Output
+    output = nodes.new(type='ShaderNodeOutputMaterial')
+    output.location = (300, 0)
+    
+    # Connect
+    links.new(rgb.outputs['Color'], principled.inputs['Base Color'])
+    links.new(principled.outputs['BSDF'], output.inputs['Surface'])
+    
+    return material
+
+def create_mtlx_chrome_material():
+    """Create a chrome material that replicates standard_surface_chrome.mtlx."""
+    material = bpy.data.materials.new(name="MTLX_Chrome")
+    material.use_nodes = True
+    nodes = material.node_tree.nodes
+    links = material.node_tree.links
+    
+    # Clear default nodes
+    nodes.clear()
+    
+    # Create Principled BSDF with chrome properties
+    principled = nodes.new(type='ShaderNodeBsdfPrincipled')
+    principled.location = (0, 0)
+    principled.inputs['Base Color'].default_value = (0.8, 0.8, 0.8, 1.0)  # chrome color
+    principled.inputs['Metallic'].default_value = 1.0  # fully metallic
+    principled.inputs['Roughness'].default_value = 0.0  # very smooth
+    # Note: Blender doesn't have separate 'Specular' input, it's built into the shader
+    
+    # Create Material Output
+    output = nodes.new(type='ShaderNodeOutputMaterial')
+    output.location = (300, 0)
+    
+    # Connect
+    links.new(principled.outputs['BSDF'], output.inputs['Surface'])
+    
+    return material
+
+def create_mtlx_copper_material():
+    """Create a copper material that replicates standard_surface_copper.mtlx."""
+    material = bpy.data.materials.new(name="MTLX_Copper")
+    material.use_nodes = True
+    nodes = material.node_tree.nodes
+    links = material.node_tree.links
+    
+    # Clear default nodes
+    nodes.clear()
+    
+    # Create Principled BSDF with copper properties
+    principled = nodes.new(type='ShaderNodeBsdfPrincipled')
+    principled.location = (0, 0)
+    principled.inputs['Base Color'].default_value = (0.722, 0.451, 0.2, 1.0)  # copper color
+    principled.inputs['Metallic'].default_value = 1.0  # fully metallic
+    principled.inputs['Roughness'].default_value = 0.1  # slightly rough
+    # Note: Blender doesn't have separate 'Specular' input, it's built into the shader
+    
+    # Create Material Output
+    output = nodes.new(type='ShaderNodeOutputMaterial')
+    output.location = (300, 0)
+    
+    # Connect
+    links.new(principled.outputs['BSDF'], output.inputs['Surface'])
+    
+    return material
+
+def create_mtlx_jade_material():
+    """Create a jade material that replicates standard_surface_jade.mtlx."""
+    material = bpy.data.materials.new(name="MTLX_Jade")
+    material.use_nodes = True
+    nodes = material.node_tree.nodes
+    links = material.node_tree.links
+    
+    # Clear default nodes
+    nodes.clear()
+    
+    # Create Principled BSDF with jade properties
+    principled = nodes.new(type='ShaderNodeBsdfPrincipled')
+    principled.location = (0, 0)
+    principled.inputs['Base Color'].default_value = (0.2, 0.8, 0.4, 1.0)  # jade green
+    principled.inputs['Metallic'].default_value = 0.0  # non-metallic
+    principled.inputs['Roughness'].default_value = 0.3  # semi-rough
+    # Note: Blender doesn't have separate 'Specular' input, it's built into the shader
+    principled.inputs['Subsurface Weight'].default_value = 0.1  # slight subsurface scattering
+    # Note: Blender doesn't have separate 'Subsurface Color' input, it uses the base color
+    
+    # Create Material Output
+    output = nodes.new(type='ShaderNodeOutputMaterial')
+    output.location = (300, 0)
+    
+    # Connect
+    links.new(principled.outputs['BSDF'], output.inputs['Surface'])
+    
+    return material
+
 def create_test_scene_and_save(material_func, filename):
     """Create a test scene with the given material and save it."""
     clear_scene()
@@ -548,6 +783,7 @@ def main():
     
     # Define test materials
     test_materials = [
+        # Original test materials
         (create_simple_principled_material, "SimplePrincipled"),
         (create_texture_based_material, "TextureBased"),
         (create_complex_procedural_material, "ComplexProcedural"),
@@ -556,11 +792,19 @@ def main():
         (create_emission_material, "EmissionMaterial"),
         (create_mixed_shader_material, "MixedShader"),
         (create_math_heavy_material, "MathHeavy"),
-
         (create_musgrave_texture_material, "MusgraveTexture"),
         (create_geometry_info_material, "GeometryInfo"),
         (create_object_info_material, "ObjectInfo"),
         (create_light_path_material, "LightPath"),
+        
+        # New MaterialX reference replicas
+        (create_mtlx_gold_material, "MTLX_Gold"),
+        (create_mtlx_glass_material, "MTLX_Glass"),
+        (create_mtlx_checkerboard_material, "MTLX_Checkerboard"),
+        (create_mtlx_single_color_material, "MTLX_SingleColor"),
+        (create_mtlx_chrome_material, "MTLX_Chrome"),
+        (create_mtlx_copper_material, "MTLX_Copper"),
+        (create_mtlx_jade_material, "MTLX_Jade"),
     ]
     
     created_files = []

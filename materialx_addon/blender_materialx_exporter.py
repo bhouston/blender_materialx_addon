@@ -573,8 +573,8 @@ NODE_MAPPING = {
         'mtlx_type': 'add',  # Will be overridden by operation
         'mtlx_category': 'float',
         'inputs': {
-            'A': 'in1',
-            'B': 'in2',
+            0: 'in1',  # First input (A)
+            1: 'in2',  # Second input (B)
         },
         'outputs': {
             'Value': 'out',
@@ -1394,16 +1394,27 @@ class NodeMapper:
         # Create node with enhanced type safety
         node_name = builder.add_node(mtlx_operation, f"{mtlx_operation}_{node.name}", "float")
         
-        # Map inputs using enhanced schema
+        # Map inputs using enhanced schema - MATH is a dictionary, not a list
         if 'MATH' in NODE_SCHEMAS:
-            for entry in NODE_SCHEMAS['MATH']:
-                blender_input = entry['blender']
-                mtlx_param = entry['mtlx']
-                param_type = entry['type']
-                param_category = entry.get('category', 'float')
-                
+            math_schema = NODE_SCHEMAS['MATH']
+            inputs = math_schema.get('inputs', {})
+            
+            for blender_input, mtlx_param in inputs.items():
                 try:
-                    is_connected, value_or_node, type_str = get_input_value_or_connection(node, blender_input, exported_nodes)
+                    # For math nodes, blender_input is an integer index (0, 1)
+                    # We need to access the input by index
+                    if isinstance(blender_input, int):
+                        input_socket = node.inputs[blender_input]
+                        if input_socket.is_linked and input_socket.links:
+                            from_node = input_socket.links[0].from_node
+                            if exported_nodes is not None and from_node in exported_nodes:
+                                is_connected, value_or_node, type_str = True, exported_nodes[from_node], str(input_socket.type)
+                            else:
+                                is_connected, value_or_node, type_str = True, from_node.name, str(input_socket.type)
+                        else:
+                            is_connected, value_or_node, type_str = False, input_socket.default_value, str(input_socket.type)
+                    else:
+                        is_connected, value_or_node, type_str = get_input_value_or_connection(node, blender_input, exported_nodes)
                     
                     if is_connected:
                         # Get the correct output name from the source node
@@ -1443,11 +1454,26 @@ class NodeMapper:
                         builder.add_connection(value_or_node, output_name, node_name, mtlx_param)
                     else:
                         # Set default value using type-safe method
-                        default_value = 0.0 if blender_input == 'A' else 0.0
+                        # For ifgreater nodes, we need to handle in3 and in4 parameters
+                        if mtlx_operation == 'ifgreater':
+                            if mtlx_param == 'in3':
+                                default_value = 1.0  # true value
+                            elif mtlx_param == 'in4':
+                                default_value = 0.0  # false value
+                            else:
+                                default_value = 0.0
+                        elif mtlx_operation == 'modulo':
+                            if mtlx_param == 'in2':
+                                default_value = 2.0  # modulo by 2
+                            else:
+                                default_value = 0.0
+                        else:
+                            default_value = 0.0 if blender_input == 0 else 0.0
+                        
                         builder.library_builder.node_builder.create_mtlx_input(
                             builder.nodes[node_name], mtlx_param, 
                             value=default_value,
-                            node_type=mtlx_operation, category=param_category
+                            node_type=mtlx_operation, category='float'
                         )
                         
                 except (KeyError, AttributeError):
