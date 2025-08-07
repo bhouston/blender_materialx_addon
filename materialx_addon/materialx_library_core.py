@@ -978,7 +978,7 @@ class MaterialXDocumentManager:
     
     def _is_custom_node_type(self, node_type: str) -> bool:
         """Check if a node type requires custom definitions."""
-        return node_type in ["brick_texture", "curve_rgb", "convert_vector3_to_vector2", "convert_vector2_to_vector3", "convert_color3_to_vector2", "convert_vector4_to_vector3", "convert_color4_to_color3"]
+        return node_type in ["brick_texture", "curve_rgb", "curvelookup", "convert_vector3_to_vector2", "convert_vector2_to_vector3", "convert_color3_to_vector2", "convert_vector4_to_vector3", "convert_vector3_to_vector4", "convert_color4_to_color3", "convert_color3_to_color4"]
     
     def cleanup(self):
         """Clean up resources and free memory."""
@@ -1784,9 +1784,26 @@ class MaterialXNodeBuilder:
                     raise MaterialXError(f"Output '{from_output}' not found on node '{from_node.getName()}'", "missing_output")
             
             # Create input if it doesn't exist
-            input_port = to_node.addInputFromNodeDef(to_input)
+            input_port = to_node.getInput(to_input)
             if not input_port:
-                raise MaterialXError(f"Failed to create input port '{to_input}' on node '{to_node.getName()}'", "input_creation_failed")
+                # Try to create from node definition first
+                input_port = to_node.addInputFromNodeDef(to_input)
+                if not input_port:
+                    # For custom nodes, try to add the input manually
+                    try:
+                        # Get the input type from the node definition or use a default
+                        input_type = "color3"  # Default type
+                        node_def = to_node.getNodeDef()
+                        if node_def:
+                            input_def = node_def.getInput(to_input)
+                            if input_def:
+                                input_type = input_def.getType()
+                        
+                        input_port = to_node.addInput(to_input, input_type)
+                        if not input_port:
+                            raise MaterialXError(f"Failed to create input port '{to_input}' on node '{to_node.getName()}'", "input_creation_failed")
+                    except Exception as e:
+                        raise MaterialXError(f"Failed to create input port '{to_input}' on node '{to_node.getName()}'", "input_creation_failed")
             
             # Remove any existing value
             input_port.removeAttribute('value')
@@ -1941,9 +1958,13 @@ class MaterialXNodeBuilder:
                 # Use custom node definitions for complex conversions
                 custom_node_type = complex_conversions[conversion_key]
                 
-                # Check if we have a custom node manager
-                if hasattr(self, 'custom_node_manager') and self.custom_node_manager:
-                    custom_node = self.custom_node_manager.add_custom_node_to_document(
+                # Get the custom node manager from the document manager
+                custom_node_manager = None
+                if hasattr(self, 'doc_manager') and self.doc_manager:
+                    custom_node_manager = self.doc_manager.custom_node_manager
+                
+                if custom_node_manager:
+                    custom_node = custom_node_manager.add_custom_node_to_document(
                         custom_node_type, conversion_name, parent
                     )
                     if custom_node:
@@ -2711,7 +2732,7 @@ class MaterialXLibraryBuilder:
     
     def _is_custom_node_type(self, node_type: str) -> bool:
         """Check if a node type requires custom definitions."""
-        return node_type in ["brick_texture", "curve_rgb", "convert_vector3_to_vector2", "convert_vector2_to_vector3", "convert_color3_to_vector2", "convert_vector4_to_vector3", "convert_color4_to_color3"]
+        return node_type in ["brick_texture", "curve_rgb", "curvelookup", "convert_vector3_to_vector2", "convert_vector2_to_vector3", "convert_color3_to_vector2", "convert_vector4_to_vector3", "convert_vector3_to_vector4", "convert_color4_to_color3", "convert_color3_to_color4"]
     
     def _initialize_custom_node_manager(self):
         """Initialize the custom node manager when needed."""

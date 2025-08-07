@@ -81,8 +81,8 @@ class CustomNodeDefinitionManager:
         # Create the brick texture implementation
         self._create_brick_texture_implementation(brick_impl)
         
-        # Link implementation to node definition - FIXED: use setImplementationName
-        brick_nodedef.setImplementationName("IM_brick_texture")
+        # Link implementation to node definition
+        brick_nodedef.setAttribute("implname", "IM_brick_texture")
         
         # Store for later use
         self.custom_node_defs["brick_texture"] = {
@@ -93,65 +93,90 @@ class CustomNodeDefinitionManager:
         self.logger.info("Added Brick Texture custom node definition")
     
     def _add_curve_rgb_definition(self):
-        """Add custom RGB Curves node definition and implementation using curvelookup."""
+        """Add custom RGB Curves node definition and implementation."""
         
-        # Use standard MaterialX curvelookup node - no custom definition needed
-        self.logger.info("Using standard MaterialX curvelookup node for RGB Curves")
+        # Check if the node definition already exists
+        existing_nodedef = self.document.getNodeDef("ND_curvelookup")
+        if existing_nodedef:
+            self.logger.info("Curve lookup node definition already exists, skipping creation")
+            self.custom_node_defs["curvelookup"] = {
+                "nodedef": existing_nodedef,
+                "implementation": self.document.getNodeGraph("IM_curvelookup")
+            }
+            return
         
-        # Store reference to standard node type
+        # Node Definition
+        curve_nodedef = self.document.addNodeDef("ND_curvelookup", "color3", "curvelookup")
+        curve_nodedef.setNodeGroup("adjustment")
+        curve_nodedef.setAttribute("version", "1.0")
+        curve_nodedef.setAttribute("description", "RGB Curves lookup node for Blender compatibility")
+        
+        # Inputs
+        inputs = [
+            ("in", "color3", "0,0,0", "Input color"),
+            ("texcoord", "vector2", "0,0", "Texture coordinates for curve lookup"),
+        ]
+        
+        for name, type_str, default_value, description in inputs:
+            input_elem = curve_nodedef.addInput(name, type_str)
+            input_elem.setValueString(default_value)
+            input_elem.setAttribute("description", description)
+        
+        # Output
+        output = curve_nodedef.addOutput("out", "color3")
+        output.setAttribute("description", "Curve-adjusted color output")
+        
+        # Implementation NodeGraph
+        curve_impl = self.document.addNodeGraph("IM_curvelookup")
+        curve_impl.setAttribute("description", "RGB Curves implementation")
+        
+        # Create the curve implementation
+        self._create_curve_rgb_implementation(curve_impl)
+        
+        # Link implementation to node definition
+        curve_nodedef.setAttribute("implname", "IM_curvelookup")
+        
+        # Store for later use
         self.custom_node_defs["curvelookup"] = {
-            "nodedef": None,  # Use standard node definition
-            "implementation": None,  # Use standard implementation
-            "standard_node": True
+            "nodedef": curve_nodedef,
+            "implementation": curve_impl
         }
+        
+        self.logger.info("Added Curve Lookup custom node definition")
     
     def _create_curve_rgb_implementation(self, nodegraph: mx.NodeGraph):
-        """Create the implementation for RGB Curves using curvelookup node."""
+        """Create the implementation for RGB Curves using standard MaterialX nodes."""
         
-        # Create a curvelookup node for the curve operation
-        curve_node = nodegraph.addNode("curvelookup", "curve_lookup")
-        curve_node.setType("color3")
+        # For now, implement a simple pass-through using a mix node
+        # This can be enhanced later with actual curve interpolation
+        mix_node = nodegraph.addNode("mix", "curve_mix")
+        mix_node.setType("color3")
         
-        # Set up the curve node inputs
-        curve_node.addInput("in", "color3").setNodeName("in")
-        curve_node.addInput("knots", "floatarray").setValue(mx.FloatArray([0.0, 1.0]))
-        curve_node.addInput("knotvalues", "floatarray").setValue(mx.FloatArray([0.0, 1.0]))
+        # Connect input to mix node - use setNodeName for string connections
+        fg_input = mix_node.addInput("fg", "color3")
+        fg_input.setNodeName("in")
         
-        # Set output
-        nodegraph.addOutput("out", "color3").setNodeName("curve_lookup")
+        bg_input = mix_node.addInput("bg", "color3")
+        bg_input.setNodeName("in")  # Same as input for now
         
-        self.logger.debug("Created Curve RGB implementation using curvelookup")
+        mix_input = mix_node.addInput("mix", "float")
+        mix_input.setValueString("1.0")  # Full mix for pass-through
+        
+        # Set output - use setNodeName for string connections
+        output = nodegraph.addOutput("out", "color3")
+        output.setNodeName("curve_mix")
+        
+        self.logger.debug("Created Curve RGB implementation using mix node (pass-through)")
     
     def _add_type_conversion_definitions(self):
-        """Add standard MaterialX node definitions for type conversions."""
-        
-        # Use standard MaterialX nodes for type conversions
-        self.logger.info("Using standard MaterialX nodes for type conversions")
-        
-        # Store references to standard node types
-        self.custom_node_defs["separate3"] = {
-            "nodedef": None,  # Use standard node definition
-            "implementation": None,  # Use standard implementation
-            "standard_node": True
-        }
-        
-        self.custom_node_defs["combine3"] = {
-            "nodedef": None,  # Use standard node definition
-            "implementation": None,  # Use standard implementation
-            "standard_node": True
-        }
-        
-        self.custom_node_defs["separate2"] = {
-            "nodedef": None,  # Use standard node definition
-            "implementation": None,  # Use standard implementation
-            "standard_node": True
-        }
-        
-        self.custom_node_defs["combine2"] = {
-            "nodedef": None,  # Use standard node definition
-            "implementation": None,  # Use standard implementation
-            "standard_node": True
-        }
+        """Add all type conversion node definitions."""
+        self._add_vector3_to_vector2_definition()
+        self._add_vector2_to_vector3_definition()
+        self._add_color3_to_vector2_definition()
+        self._add_vector4_to_vector3_definition()
+        self._add_vector3_to_vector4_definition()
+        self._add_color4_to_color3_definition()
+        self._add_color3_to_color4_definition()
     
     def _add_vector3_to_vector2_definition(self):
         """Add custom Vector3 to Vector2 conversion node definition."""
@@ -186,8 +211,8 @@ class CustomNodeDefinitionManager:
         # Create the implementation
         self._create_vector3_to_vector2_implementation(impl)
         
-        # Link implementation to node definition - FIXED: use setImplementationName
-        nodedef.setImplementationName("IM_convert_vector3_to_vector2_vector2")
+        # Link implementation to node definition
+        nodedef.setAttribute("implname", "IM_convert_vector3_to_vector2_vector2")
         
         # Store for later use
         self.custom_node_defs["convert_vector3_to_vector2"] = {
@@ -198,20 +223,30 @@ class CustomNodeDefinitionManager:
         self.logger.info("Added Vector3 to Vector2 conversion node definition")
     
     def _create_vector3_to_vector2_implementation(self, nodegraph: mx.NodeGraph):
-        """Create the implementation for Vector3 to Vector2 conversion using separate2 and combine2."""
+        """Create the implementation for Vector3 to Vector2 conversion using separate3 and combine2."""
         
         # Input node
         input_node = nodegraph.addNode("separate3", "separate_input")
-        input_node.setConnectedNode("in", "in")
+        input_node.setType("vector3")
+        
+        # Connect input
+        input_input = input_node.addInput("in", "vector3")
+        input_input.setNodeName("in")
         
         # Combine X and Y components
         combine_node = nodegraph.addNode("combine2", "combine_xy")
-        combine_node.setConnectedNode("in1", "separate_input.outx")
-        combine_node.setConnectedNode("in2", "separate_input.outy")
+        combine_node.setType("vector2")
+        
+        # Connect inputs
+        in1_input = combine_node.addInput("in1", "float")
+        in1_input.setNodeName("separate_input.outx")
+        
+        in2_input = combine_node.addInput("in2", "float")
+        in2_input.setNodeName("separate_input.outy")
         
         # Output
-        output_node = nodegraph.addNode("output", "out")
-        output_node.setConnectedNode("in", "combine_xy.out")
+        output = nodegraph.addOutput("out", "vector2")
+        output.setNodeName("combine_xy.out")
     
     def _add_vector2_to_vector3_definition(self):
         """Add custom Vector2 to Vector3 conversion node definition."""
@@ -246,8 +281,8 @@ class CustomNodeDefinitionManager:
         # Create the implementation
         self._create_vector2_to_vector3_implementation(impl)
         
-        # Link implementation to node definition - FIXED: use setImplementationName
-        nodedef.setImplementationName("IM_convert_vector2_to_vector3_vector3")
+        # Link implementation to node definition
+        nodedef.setAttribute("implname", "IM_convert_vector2_to_vector3_vector3")
         
         # Store for later use
         self.custom_node_defs["convert_vector2_to_vector3"] = {
@@ -262,21 +297,35 @@ class CustomNodeDefinitionManager:
         
         # Input node
         input_node = nodegraph.addNode("separate2", "separate_input")
-        input_node.setConnectedNode("in", "in")
+        input_node.setType("vector2")
+        
+        # Connect input
+        input_input = input_node.addInput("in", "vector2")
+        input_input.setNodeName("in")
         
         # Constant for Z=0
         z_constant = nodegraph.addNode("constant", "z_zero")
-        z_constant.setInputValue("value", 0.0)
+        z_constant.setType("float")
+        z_input = z_constant.addInput("value", "float")
+        z_input.setValueString("0.0")
         
         # Combine X, Y, and Z=0
         combine_node = nodegraph.addNode("combine3", "combine_xyz")
-        combine_node.setConnectedNode("in1", "separate_input.outx")
-        combine_node.setConnectedNode("in2", "separate_input.outy")
-        combine_node.setConnectedNode("in3", "z_zero.out")
+        combine_node.setType("vector3")
+        
+        # Connect inputs
+        in1_input = combine_node.addInput("in1", "float")
+        in1_input.setNodeName("separate_input.outx")
+        
+        in2_input = combine_node.addInput("in2", "float")
+        in2_input.setNodeName("separate_input.outy")
+        
+        in3_input = combine_node.addInput("in3", "float")
+        in3_input.setNodeName("z_zero.out")
         
         # Output
-        output_node = nodegraph.addNode("output", "out")
-        output_node.setConnectedNode("in", "combine_xyz.out")
+        output = nodegraph.addOutput("out", "vector3")
+        output.setNodeName("combine_xyz.out")
     
     def _add_color3_to_vector2_definition(self):
         """Add custom Color3 to Vector2 conversion node definition."""
@@ -311,8 +360,8 @@ class CustomNodeDefinitionManager:
         # Create the implementation
         self._create_color3_to_vector2_implementation(impl)
         
-        # Link implementation to node definition - FIXED: use setImplementationName
-        nodedef.setImplementationName("IM_convert_color3_to_vector2_vector2")
+        # Link implementation to node definition
+        nodedef.setAttribute("implname", "IM_convert_color3_to_vector2_vector2")
         
         # Store for later use
         self.custom_node_defs["convert_color3_to_vector2"] = {
@@ -327,16 +376,26 @@ class CustomNodeDefinitionManager:
         
         # Input node
         input_node = nodegraph.addNode("separate3", "separate_input")
-        input_node.setConnectedNode("in", "in")
+        input_node.setType("color3")
+        
+        # Connect input
+        input_input = input_node.addInput("in", "color3")
+        input_input.setNodeName("in")
         
         # Combine R and G components
         combine_node = nodegraph.addNode("combine2", "combine_rg")
-        combine_node.setConnectedNode("in1", "separate_input.outx")
-        combine_node.setConnectedNode("in2", "separate_input.outy")
+        combine_node.setType("vector2")
+        
+        # Connect inputs
+        in1_input = combine_node.addInput("in1", "float")
+        in1_input.setNodeName("separate_input.outx")
+        
+        in2_input = combine_node.addInput("in2", "float")
+        in2_input.setNodeName("separate_input.outy")
         
         # Output
-        output_node = nodegraph.addNode("output", "out")
-        output_node.setConnectedNode("in", "combine_rg.out")
+        output = nodegraph.addOutput("out", "vector2")
+        output.setNodeName("combine_rg.out")
     
     def _add_vector4_to_vector3_definition(self):
         """Add custom Vector4 to Vector3 conversion node definition."""
@@ -371,8 +430,8 @@ class CustomNodeDefinitionManager:
         # Create the implementation
         self._create_vector4_to_vector3_implementation(impl)
         
-        # Link implementation to node definition - FIXED: use setImplementationName
-        nodedef.setImplementationName("IM_convert_vector4_to_vector3_vector3")
+        # Link implementation to node definition
+        nodedef.setAttribute("implname", "IM_convert_vector4_to_vector3_vector3")
         
         # Store for later use
         self.custom_node_defs["convert_vector4_to_vector3"] = {
@@ -387,17 +446,29 @@ class CustomNodeDefinitionManager:
         
         # Input node
         input_node = nodegraph.addNode("separate4", "separate_input")
-        input_node.setConnectedNode("in", "in")
+        input_node.setType("vector4")
+        
+        # Connect input
+        input_input = input_node.addInput("in", "vector4")
+        input_input.setNodeName("in")
         
         # Combine X, Y, and Z components
         combine_node = nodegraph.addNode("combine3", "combine_xyz")
-        combine_node.setConnectedNode("in1", "separate_input.outx")
-        combine_node.setConnectedNode("in2", "separate_input.outy")
-        combine_node.setConnectedNode("in3", "separate_input.outz")
+        combine_node.setType("vector3")
+        
+        # Connect inputs
+        in1_input = combine_node.addInput("in1", "float")
+        in1_input.setNodeName("separate_input.outx")
+        
+        in2_input = combine_node.addInput("in2", "float")
+        in2_input.setNodeName("separate_input.outy")
+        
+        in3_input = combine_node.addInput("in3", "float")
+        in3_input.setNodeName("separate_input.outz")
         
         # Output
-        output_node = nodegraph.addNode("output", "out")
-        output_node.setConnectedNode("in", "combine_xyz.out")
+        output = nodegraph.addOutput("out", "vector3")
+        output.setNodeName("combine_xyz.out")
     
     def _add_color4_to_color3_definition(self):
         """Add custom Color4 to Color3 conversion node definition."""
@@ -432,8 +503,8 @@ class CustomNodeDefinitionManager:
         # Create the implementation
         self._create_color4_to_color3_implementation(impl)
         
-        # Link implementation to node definition - FIXED: use setImplementationName
-        nodedef.setImplementationName("IM_convert_color4_to_color3_color3")
+        # Link implementation to node definition
+        nodedef.setAttribute("implname", "IM_convert_color4_to_color3_color3")
         
         # Store for later use
         self.custom_node_defs["convert_color4_to_color3"] = {
@@ -464,6 +535,170 @@ class CustomNodeDefinitionManager:
         
         # Set output
         nodegraph.addOutput("out", "color3").setNodeName("combine_rgb")
+    
+    def _add_vector3_to_vector4_definition(self):
+        """Add custom Vector3 to Vector4 conversion node definition."""
+        
+        # Check if already exists
+        existing_nodedef = self.document.getNodeDef("ND_convert_vector3_to_vector4_vector4")
+        if existing_nodedef:
+            self.custom_node_defs["convert_vector3_to_vector4"] = {
+                "nodedef": existing_nodedef,
+                "implementation": self.document.getNodeGraph("IM_convert_vector3_to_vector4_vector4")
+            }
+            return
+        
+        # Node Definition
+        nodedef = self.document.addNodeDef("ND_convert_vector3_to_vector4_vector4", "vector4", "convert_vector3_to_vector4")
+        nodedef.setNodeGroup("conversion")
+        nodedef.setAttribute("version", "1.0")
+        nodedef.setAttribute("description", "Convert vector3 to vector4 by adding W=1.0")
+        
+        # Input
+        input_elem = nodedef.addInput("in", "vector3")
+        input_elem.setAttribute("description", "Input vector3")
+        
+        # Output
+        output = nodedef.addOutput("out", "vector4")
+        output.setAttribute("description", "Output vector4 (X,Y,Z,W=1.0)")
+        
+        # Implementation NodeGraph
+        impl = self.document.addNodeGraph("IM_convert_vector3_to_vector4_vector4")
+        impl.setAttribute("description", "Vector3 to Vector4 conversion implementation")
+        
+        # Create the implementation
+        self._create_vector3_to_vector4_implementation(impl)
+        
+        # Link implementation to node definition
+        nodedef.setAttribute("implname", "IM_convert_vector3_to_vector4_vector4")
+        
+        # Store for later use
+        self.custom_node_defs["convert_vector3_to_vector4"] = {
+            "nodedef": nodedef,
+            "implementation": impl
+        }
+        
+        self.logger.info("Added Vector3 to Vector4 conversion node definition")
+    
+    def _create_vector3_to_vector4_implementation(self, nodegraph: mx.NodeGraph):
+        """Create the implementation for Vector3 to Vector4 conversion using separate3 and combine4."""
+        
+        # Input node
+        input_node = nodegraph.addNode("separate3", "separate_input")
+        input_node.setType("vector3")
+        
+        # Connect input
+        input_input = input_node.addInput("in", "vector3")
+        input_input.setNodeName("in")
+        
+        # Constant for W=1.0
+        w_constant = nodegraph.addNode("constant", "w_one")
+        w_constant.setType("float")
+        w_input = w_constant.addInput("value", "float")
+        w_input.setValueString("1.0")
+        
+        # Combine X, Y, Z, and W=1.0
+        combine_node = nodegraph.addNode("combine4", "combine_xyzw")
+        combine_node.setType("vector4")
+        
+        # Connect inputs
+        in1_input = combine_node.addInput("in1", "float")
+        in1_input.setNodeName("separate_input.outx")
+        
+        in2_input = combine_node.addInput("in2", "float")
+        in2_input.setNodeName("separate_input.outy")
+        
+        in3_input = combine_node.addInput("in3", "float")
+        in3_input.setNodeName("separate_input.outz")
+        
+        in4_input = combine_node.addInput("in4", "float")
+        in4_input.setNodeName("w_one.out")
+        
+        # Output
+        output = nodegraph.addOutput("out", "vector4")
+        output.setNodeName("combine_xyzw.out")
+    
+    def _add_color3_to_color4_definition(self):
+        """Add custom Color3 to Color4 conversion node definition."""
+        
+        # Check if already exists
+        existing_nodedef = self.document.getNodeDef("ND_convert_color3_to_color4_color4")
+        if existing_nodedef:
+            self.custom_node_defs["convert_color3_to_color4"] = {
+                "nodedef": existing_nodedef,
+                "implementation": self.document.getNodeGraph("IM_convert_color3_to_color4_color4")
+            }
+            return
+        
+        # Node Definition
+        nodedef = self.document.addNodeDef("ND_convert_color3_to_color4_color4", "color4", "convert_color3_to_color4")
+        nodedef.setNodeGroup("conversion")
+        nodedef.setAttribute("version", "1.0")
+        nodedef.setAttribute("description", "Convert color3 to color4 by adding A=1.0")
+        
+        # Input
+        input_elem = nodedef.addInput("in", "color3")
+        input_elem.setAttribute("description", "Input color3")
+        
+        # Output
+        output = nodedef.addOutput("out", "color4")
+        output.setAttribute("description", "Output color4 (R,G,B,A=1.0)")
+        
+        # Implementation NodeGraph
+        impl = self.document.addNodeGraph("IM_convert_color3_to_color4_color4")
+        impl.setAttribute("description", "Color3 to Color4 conversion implementation")
+        
+        # Create the implementation
+        self._create_color3_to_color4_implementation(impl)
+        
+        # Link implementation to node definition
+        nodedef.setAttribute("implname", "IM_convert_color3_to_color4_color4")
+        
+        # Store for later use
+        self.custom_node_defs["convert_color3_to_color4"] = {
+            "nodedef": nodedef,
+            "implementation": impl
+        }
+        
+        self.logger.info("Added Color3 to Color4 conversion node definition")
+    
+    def _create_color3_to_color4_implementation(self, nodegraph: mx.NodeGraph):
+        """Create the implementation for Color3 to Color4 conversion using separate3 and combine4."""
+        
+        # Input node
+        input_node = nodegraph.addNode("separate3", "separate_input")
+        input_node.setType("color3")
+        
+        # Connect input
+        input_input = input_node.addInput("in", "color3")
+        input_input.setNodeName("in")
+        
+        # Constant for A=1.0
+        a_constant = nodegraph.addNode("constant", "a_one")
+        a_constant.setType("float")
+        a_input = a_constant.addInput("value", "float")
+        a_input.setValueString("1.0")
+        
+        # Combine R, G, B, and A=1.0
+        combine_node = nodegraph.addNode("combine4", "combine_rgba")
+        combine_node.setType("color4")
+        
+        # Connect inputs
+        in1_input = combine_node.addInput("in1", "float")
+        in1_input.setNodeName("separate_input.outx")
+        
+        in2_input = combine_node.addInput("in2", "float")
+        in2_input.setNodeName("separate_input.outy")
+        
+        in3_input = combine_node.addInput("in3", "float")
+        in3_input.setNodeName("separate_input.outz")
+        
+        in4_input = combine_node.addInput("in4", "float")
+        in4_input.setNodeName("a_one.out")
+        
+        # Output
+        output = nodegraph.addOutput("out", "color4")
+        output.setNodeName("combine_rgba.out")
 
     def _create_brick_texture_implementation(self, nodegraph: mx.NodeGraph):
         """Create the nodegraph implementation for brick texture."""
@@ -609,7 +844,7 @@ class CustomNodeDefinitionManager:
 # Registry of Blender node types that need custom definitions
 BLENDER_CUSTOM_NODE_TYPES = {
     "TEX_BRICK": "brick_texture",
-    # CURVE_RGB maps to standard MaterialX curvelookup node
+    "CURVE_RGB": "curvelookup",
     # Add more mappings as needed
 }
 
