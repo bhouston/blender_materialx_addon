@@ -275,6 +275,7 @@ NODE_SCHEMAS = {
     ],
     'CURVE_RGB': [
         {'blender': 'Color', 'mtlx': 'in', 'type': 'color3', 'category': 'color3'},
+        {'blender': 'Fac', 'mtlx': 'texcoord', 'type': 'vector2', 'category': 'color3'},
     ],
     'CLAMP': [
         {'blender': 'Value', 'mtlx': 'in', 'type': 'color3', 'category': 'color3'},
@@ -289,7 +290,10 @@ NODE_SCHEMAS = {
         {'blender': 'To Max', 'mtlx': 'outhigh', 'type': 'color3', 'category': 'color3'},
     ],
     'VALTORGB': [
-        {'blender': 'Fac', 'mtlx': 'in', 'type': 'float', 'category': 'color3'},
+        {'blender': 'Fac', 'mtlx': 'texcoord', 'type': 'vector2', 'category': 'color4'},
+        # Add ramp-specific inputs
+        {'blender': 'Color Ramp', 'mtlx': 'valuel', 'type': 'color4', 'category': 'color4'},
+        {'blender': 'Color Ramp', 'mtlx': 'valuer', 'type': 'color4', 'category': 'color4'},
     ],
 
     'TEX_MUSGRAVE': [
@@ -492,7 +496,7 @@ NODE_MAPPING = {
         }
     },
     'CURVE_RGB': {
-        'mtlx_type': 'curve',
+        'mtlx_type': 'curve_rgb',
         'mtlx_category': 'color3',
         'inputs': {
             'Color': 'in',
@@ -562,7 +566,7 @@ NODE_MAPPING = {
     },
     'VALTORGB': {
         'mtlx_type': 'ramplr',
-        'mtlx_category': 'color3',
+        'mtlx_category': 'color4',
         'inputs': {
             'Fac': 'texcoord',
         },
@@ -1655,7 +1659,7 @@ class NodeMapper:
     @staticmethod
     def map_curve_rgb_enhanced(node, builder: MaterialXBuilder, input_nodes: Dict, input_nodes_by_index: Dict = None, blender_node=None, constant_manager=None, exported_nodes=None) -> str:
         """Enhanced RGB curves mapping with type-safe input creation."""
-        return map_node_with_schema_enhanced(node, builder, NODE_SCHEMAS['CURVE_RGB'], 'curve', 'color3', constant_manager, exported_nodes)
+        return map_node_with_schema_enhanced(node, builder, NODE_SCHEMAS['CURVE_RGB'], 'curve_rgb', 'color3', constant_manager, exported_nodes)
     
     @staticmethod
     def map_clamp_enhanced(node, builder: MaterialXBuilder, input_nodes: Dict, input_nodes_by_index: Dict = None, blender_node=None, constant_manager=None, exported_nodes=None) -> str:
@@ -1713,8 +1717,8 @@ class NodeMapper:
     @staticmethod
     def map_color_ramp(node, builder: MaterialXBuilder, input_nodes: Dict, input_nodes_by_index: Dict = None, blender_node=None, constant_manager=None, exported_nodes=None) -> str:
         """Map ColorRamp node to MaterialX ramp node."""
-        # Create ramp node with proper type - use color4 since ramp outputs color4
-        node_name = builder.add_node("ramp", f"colorramp_{node.name}", "color4")
+        # Create ramp node with proper type - use ramplr since it's the correct MaterialX ramp node
+        node_name = builder.add_node("ramplr", f"colorramp_{node.name}", "color4")
         
         # Extract Color Ramp data from Blender node
         if hasattr(node, 'color_ramp'):
@@ -1734,38 +1738,32 @@ class NodeMapper:
             num_elements = len(ramp.elements)
             num_intervals = max(2, num_elements - 1)  # At least 2 intervals
             
-            # Set basic ramp properties
+            # Set basic ramp properties for ramplr
             builder.library_builder.node_builder.create_mtlx_input(
                 builder.nodes[node_name], 'interpolation', 
                 value=interpolation,
-                node_type='ramp', category='color4'
+                node_type='ramplr', category='color4'
             )
             
-            builder.library_builder.node_builder.create_mtlx_input(
-                builder.nodes[node_name], 'num_intervals', 
-                value=num_intervals,
-                node_type='ramp', category='color4'
-            )
-            
-            # Map control points (up to 10 supported by MaterialX)
-            for i in range(min(num_elements, 10)):
-                element = ramp.elements[i]
+            # Map control points for ramplr (uses valuel and valuer for left and right values)
+            if len(ramp.elements) >= 2:
+                first_element = ramp.elements[0]
+                last_element = ramp.elements[-1]
                 
-                # Set interval position
-                interval_name = f'interval{i+1}' if i > 0 else 'interval1'
+                # Set left value (first element)
+                color_value_left = [first_element.color[0], first_element.color[1], first_element.color[2], first_element.alpha]
                 builder.library_builder.node_builder.create_mtlx_input(
-                    builder.nodes[node_name], interval_name, 
-                    value=element.position,
-                    node_type='ramp', category='color4'
+                    builder.nodes[node_name], 'valuel', 
+                    value=color_value_left,
+                    node_type='ramplr', category='color4'
                 )
                 
-                # Set color (convert to color4)
-                color_name = f'color{i+1}' if i > 0 else 'color1'
-                color_value = [element.color[0], element.color[1], element.color[2], element.alpha]
+                # Set right value (last element)
+                color_value_right = [last_element.color[0], last_element.color[1], last_element.color[2], last_element.alpha]
                 builder.library_builder.node_builder.create_mtlx_input(
-                    builder.nodes[node_name], color_name, 
-                    value=color_value,
-                    node_type='ramp', category='color4'
+                    builder.nodes[node_name], 'valuer', 
+                    value=color_value_right,
+                    node_type='ramplr', category='color4'
                 )
         
         # Connect input if available
@@ -2243,15 +2241,22 @@ class MaterialXExporter:
             raise
     
     def _export_unknown_node(self, node: bpy.types.Node) -> str:
-        """Export an unknown node type as a placeholder and record it."""
-        self.unsupported_nodes.append({
-            "name": node.name,
-            "type": node.type
-        })
-        node_name = self.builder.add_node("constant", f"unknown_{node.name}", "color3",
-                                        value=[1.0, 0.0, 1.0])  # Magenta for unknown nodes
-        self.exported_nodes[node] = node_name
-        return node_name
+        """Handle unsupported nodes by providing clear error messages."""
+        error_msg = f"Unsupported node type: {node.type} ({node.name}). This node type is not supported by the MaterialX exporter."
+        
+        # Provide specific suggestions for common unsupported nodes
+        suggestions = {
+            'CURVE_RGB': 'Use the custom curve_rgb node definition that has been implemented.',
+            'VALTORGB': 'Use the ramplr node type that has been implemented.',
+            'DOT_PRODUCT': 'Use the native MaterialX dotproduct node that has been implemented.',
+            'DISTANCE': 'Use the native MaterialX distance node that has been implemented.',
+        }
+        
+        if node.type in suggestions:
+            error_msg += f" Suggestion: {suggestions[node.type]}"
+        
+        self.logger.error(error_msg)
+        raise RuntimeError(error_msg)
     
     def _write_file(self):
         """Write the MaterialX document to file with Phase 3 enhancements."""

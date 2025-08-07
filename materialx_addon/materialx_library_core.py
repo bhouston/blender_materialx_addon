@@ -838,8 +838,20 @@ class MaterialXDocumentManager:
                                 self.logger.info(f"Found partial match by type: {nodedef.getName()} (type: {nodedef_type})")
                                 break
                     else:
-                        result = None
-                        self.logger.warning(f"No node definition found for '{node_type}' (category: {category})")
+                        # Try searching for similar node types (for operations like dotproduct, distance)
+                        if node_type in ['dotproduct', 'distance']:
+                            # These nodes exist in MaterialX but might have different naming patterns
+                            for nodedef in all_node_defs:
+                                if node_type in nodedef.getName().lower():
+                                    result = nodedef
+                                    self.logger.info(f"Found similar node definition: {nodedef.getName()} for {node_type}")
+                                    break
+                            else:
+                                result = None
+                                self.logger.warning(f"No node definition found for '{node_type}' (category: {category})")
+                        else:
+                            result = None
+                            self.logger.warning(f"No node definition found for '{node_type}' (category: {category})")
             
             # Cache the result
             if result is not None:
@@ -966,7 +978,7 @@ class MaterialXDocumentManager:
     
     def _is_custom_node_type(self, node_type: str) -> bool:
         """Check if a node type requires custom definitions."""
-        return node_type in ["brick_texture"]
+        return node_type in ["brick_texture", "curve_rgb", "convert_vector3_to_vector2", "convert_vector2_to_vector3", "convert_color3_to_vector2", "convert_vector4_to_vector3", "convert_color4_to_color3"]
     
     def cleanup(self):
         """Clean up resources and free memory."""
@@ -1834,23 +1846,29 @@ class MaterialXNodeBuilder:
     
     def _get_conversion_node_ports(self, from_type: str, to_type: str) -> Tuple[str, str]:
         """Get the correct input and output port names for conversion nodes."""
+        
+        # Simple conversions
         if from_type == 'color3' and to_type == 'float':
-            # separate3 node: input 'in', output 'outr' (red component)
-            return 'in', 'outr'
-        elif from_type == 'color3' and to_type == 'vector2':
-            # separate3 node: input 'in', outputs 'outr', 'outg', 'outb'
-            # For now, use 'in' and 'outr' as a simple approach
-            return 'in', 'outr'
-        elif from_type == 'vector2' and to_type == 'vector3':
-            # combine3 node: inputs 'in1', 'in2', 'in3', output 'out'
-            # For now, use 'in1' and 'out' as a simple approach
-            return 'in1', 'out'
+            return 'in', 'outr'  # separate3: input 'in', output 'outr' (red component)
         elif from_type == 'color3' and to_type == 'vector3':
-            # combine3 node: inputs 'in1', 'in2', 'in3', output 'out'
-            return 'in1', 'out'
-        else:
-            # Default fallback
-            return 'in', 'out'
+            return 'in1', 'out'  # combine3: inputs 'in1', 'in2', 'in3', output 'out'
+        elif from_type == 'vector3' and to_type == 'color3':
+            return 'in1', 'out'  # combine3: inputs 'in1', 'in2', 'in3', output 'out'
+        
+        # Complex conversions using custom nodes
+        elif from_type == 'vector3' and to_type == 'vector2':
+            return 'in', 'out'  # Custom node: input 'in', output 'out'
+        elif from_type == 'vector2' and to_type == 'vector3':
+            return 'in', 'out'  # Custom node: input 'in', output 'out'
+        elif from_type == 'color3' and to_type == 'vector2':
+            return 'in', 'out'  # Custom node: input 'in', output 'out'
+        elif from_type == 'vector4' and to_type == 'vector3':
+            return 'in', 'out'  # Custom node: input 'in', output 'out'
+        elif from_type == 'color4' and to_type == 'color3':
+            return 'in', 'out'  # Custom node: input 'in', output 'out'
+        
+        # Default fallback
+        return 'in', 'out'
     
     def _create_conversion_node(self, from_type: str, to_type: str, parent: mx.Element) -> Optional[mx.Node]:
         """Create appropriate conversion node based on type transformation needed."""
@@ -1859,47 +1877,75 @@ class MaterialXNodeBuilder:
             conversion_name = f"convert_{from_type}_to_{to_type}_{id(self)}"
             conversion_name = parent.createValidChildName(conversion_name)
             
-            # Create conversion node based on type transformation using proper MaterialX nodes
-            if from_type == 'vector2' and to_type == 'vector3':
-                # vector2 -> vector3: use combine3 node to add Z=0
-                conversion_node = parent.addChildOfCategory('combine3', conversion_name)
-                conversion_node.setType('vector3')
-                # The combine3 node will take the vector2 input and add a Z component
-                self.logger.debug(f"Created vector2->vector3 conversion using combine3: {conversion_name}")
+            # Simple conversions that can use single nodes
+            simple_conversions = {
+                ('color3', 'float'): 'separate3',  # Extract red channel
+                ('vector3', 'color3'): 'combine3',  # Direct conversion
+                ('color3', 'vector3'): 'combine3',  # Direct conversion
+            }
+            
+            # Complex conversions that need custom nodegraphs
+            complex_conversions = {
+                ('vector3', 'vector2'): 'convert_vector3_to_vector2',
+                ('vector2', 'vector3'): 'convert_vector2_to_vector3',
+                ('color3', 'vector2'): 'convert_color3_to_vector2',
+                ('vector4', 'vector3'): 'convert_vector4_to_vector3',
+                ('vector3', 'vector4'): 'convert_vector3_to_vector4',
+                ('color4', 'color3'): 'convert_color4_to_color3',
+                ('color3', 'color4'): 'convert_color3_to_color4',
+            }
+            
+            conversion_key = (from_type, to_type)
+            
+            if conversion_key in simple_conversions:
+                # Use standard MaterialX nodes for simple conversions
+                node_type = simple_conversions[conversion_key]
+                conversion_node = parent.addChildOfCategory(node_type, conversion_name)
+                conversion_node.setType(to_type)
                 
-            elif from_type == 'color3' and to_type == 'vector2':
-                # color3 -> vector2: use separate3 node to extract first two components
-                conversion_node = parent.addChildOfCategory('separate3', conversion_name)
-                conversion_node.setType('vector2')
-                # The separate3 node will extract R and G components
-                self.logger.debug(f"Created color3->vector2 conversion using separate3: {conversion_name}")
+                # Set proper node definition for separate3
+                if from_type == 'color3' and to_type == 'float':
+                    conversion_node.setNodeDefString('ND_separate3_float')
                 
-            elif from_type == 'color3' and to_type == 'vector3':
-                # color3 -> vector3: direct conversion, use the color3 as vector3
-                conversion_node = parent.addChildOfCategory('combine3', conversion_name)
-                conversion_node.setType('vector3')
-                # The combine3 node will combine the RGB components as XYZ
-                self.logger.debug(f"Created color3->vector3 conversion using combine3: {conversion_name}")
+                self.logger.debug(f"Created simple conversion {from_type}->{to_type} using {node_type}: {conversion_name}")
+                return conversion_node
                 
-            elif from_type == 'color3' and to_type == 'float':
-                # color3 -> float: use separate3 node to extract red component
-                conversion_node = parent.addChildOfCategory('separate3', conversion_name)
-                conversion_node.setType('float')
-                # Set the proper node definition for separate3
-                conversion_node.setNodeDefString('ND_separate3_float')
-                # The separate3 node extracts components from color3
-                self.logger.debug(f"Created color3->float conversion using separate3: {conversion_name}")
+            elif conversion_key in complex_conversions:
+                # Use custom node definitions for complex conversions
+                custom_node_type = complex_conversions[conversion_key]
                 
-            elif from_type == 'vector3' and to_type == 'color3':
-                # vector3 -> color3: direct conversion, use the vector3 as color3
-                conversion_node = parent.addChildOfCategory('combine3', conversion_name)
-                conversion_node.setType('color3')
-                # The combine3 node will combine the XYZ components as RGB
-                self.logger.debug(f"Created vector3->color3 conversion using combine3: {conversion_name}")
-                
+                # Check if we have a custom node manager
+                if hasattr(self, 'custom_node_manager') and self.custom_node_manager:
+                    custom_node = self.custom_node_manager.add_custom_node_to_document(
+                        custom_node_type, conversion_name, parent
+                    )
+                    if custom_node:
+                        # Ensure the custom node has the proper input port
+                        try:
+                            # Add the input port if it doesn't exist
+                            if not custom_node.getInput('in'):
+                                custom_node.addInput('in', from_type)
+                        except Exception as e:
+                            self.logger.warning(f"Could not add input port to custom conversion node: {e}")
+                    return custom_node
+                else:
+                    # Fallback to standard nodes for complex conversions
+                    if from_type == 'vector2' and to_type == 'vector3':
+                        conversion_node = parent.addChildOfCategory('combine3', conversion_name)
+                        conversion_node.setType('vector3')
+                    elif from_type == 'color3' and to_type == 'vector2':
+                        conversion_node = parent.addChildOfCategory('separate3', conversion_name)
+                        conversion_node.setType('vector2')
+                    else:
+                        # Generic fallback
+                        conversion_node = parent.addChildOfCategory('constant', conversion_name)
+                        conversion_node.setType(to_type)
+                    
+                    self.logger.debug(f"Created fallback conversion {from_type}->{to_type}: {conversion_name}")
+                    return conversion_node
+            
             else:
                 # For other conversions, try to use a generic approach
-                # Use separate3 for extracting components or combine3 for combining
                 if 'vector' in from_type and 'color' in to_type:
                     conversion_node = parent.addChildOfCategory('combine3', conversion_name)
                     conversion_node.setType(to_type)
@@ -1912,8 +1958,7 @@ class MaterialXNodeBuilder:
                     conversion_node.setType(to_type)
                 
                 self.logger.debug(f"Created generic conversion node {from_type}->{to_type}: {conversion_name}")
-            
-            return conversion_node
+                return conversion_node
             
         except Exception as e:
             self.logger.error(f"Failed to create conversion node: {e}")
@@ -2639,7 +2684,7 @@ class MaterialXLibraryBuilder:
     
     def _is_custom_node_type(self, node_type: str) -> bool:
         """Check if a node type requires custom definitions."""
-        return node_type in ["brick_texture"]
+        return node_type in ["brick_texture", "curve_rgb", "convert_vector3_to_vector2", "convert_vector2_to_vector3", "convert_color3_to_vector2", "convert_vector4_to_vector3", "convert_color4_to_color3"]
     
     def _initialize_custom_node_manager(self):
         """Initialize the custom node manager when needed."""
