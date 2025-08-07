@@ -291,9 +291,6 @@ NODE_SCHEMAS = {
     ],
     'VALTORGB': [
         {'blender': 'Fac', 'mtlx': 'texcoord', 'type': 'vector2', 'category': 'color4'},
-        # Add ramp-specific inputs
-        {'blender': 'Color Ramp', 'mtlx': 'valuel', 'type': 'color4', 'category': 'color4'},
-        {'blender': 'Color Ramp', 'mtlx': 'valuer', 'type': 'color4', 'category': 'color4'},
     ],
 
     'TEX_MUSGRAVE': [
@@ -496,10 +493,11 @@ NODE_MAPPING = {
         }
     },
     'CURVE_RGB': {
-        'mtlx_type': 'curve_rgb',
+        'mtlx_type': 'curvelookup',  # Use MaterialX curvelookup node
         'mtlx_category': 'color3',
         'inputs': {
             'Color': 'in',
+            'Fac': 'texcoord',
         },
         'outputs': {
             'Color': 'out',
@@ -518,7 +516,7 @@ NODE_MAPPING = {
         }
     },
     'MAP_RANGE': {
-        'mtlx_type': 'maprange',
+        'mtlx_type': 'range',  # Use standard MaterialX range node
         'mtlx_category': 'color3',
         'inputs': {
             'Value': 'in',
@@ -565,7 +563,7 @@ NODE_MAPPING = {
         }
     },
     'VALTORGB': {
-        'mtlx_type': 'ramplr',
+        'mtlx_type': 'ramplr',  # Use proper MaterialX ramp node
         'mtlx_category': 'color4',
         'inputs': {
             'Fac': 'texcoord',
@@ -1016,7 +1014,7 @@ class NodeMapper:
             'TEX_GRADIENT': NodeMapper.map_gradient_texture_enhanced,
             'TEX_NOISE': NodeMapper.map_noise_texture_enhanced,
             'TEX_VORONOI': NodeMapper.map_voronoi_texture_enhanced,
-            'CURVE_RGB': NodeMapper.map_curve_rgb_enhanced,
+            'CURVE_RGB': NodeMapper.map_curve_rgb_enhanced,  # Uses curvelookup internally
             'CLAMP': NodeMapper.map_clamp_enhanced,
             'MAP_RANGE': NodeMapper.map_map_range_enhanced,
             'MAPPING': NodeMapper.map_mapping,
@@ -1658,8 +1656,8 @@ class NodeMapper:
     
     @staticmethod
     def map_curve_rgb_enhanced(node, builder: MaterialXBuilder, input_nodes: Dict, input_nodes_by_index: Dict = None, blender_node=None, constant_manager=None, exported_nodes=None) -> str:
-        """Enhanced RGB curves mapping with type-safe input creation."""
-        return map_node_with_schema_enhanced(node, builder, NODE_SCHEMAS['CURVE_RGB'], 'curve_rgb', 'color3', constant_manager, exported_nodes)
+        """Enhanced RGB curves mapping with type-safe input creation using curvelookup node."""
+        return map_node_with_schema_enhanced(node, builder, NODE_SCHEMAS['CURVE_RGB'], 'curvelookup', 'color3', constant_manager, exported_nodes)
     
     @staticmethod
     def map_clamp_enhanced(node, builder: MaterialXBuilder, input_nodes: Dict, input_nodes_by_index: Dict = None, blender_node=None, constant_manager=None, exported_nodes=None) -> str:
@@ -1668,8 +1666,8 @@ class NodeMapper:
     
     @staticmethod
     def map_map_range_enhanced(node, builder: MaterialXBuilder, input_nodes: Dict, input_nodes_by_index: Dict = None, blender_node=None, constant_manager=None, exported_nodes=None) -> str:
-        """Enhanced map range mapping with type-safe input creation."""
-        return map_node_with_schema_enhanced(node, builder, NODE_SCHEMAS['MAP_RANGE'], 'maprange', 'color3', constant_manager, exported_nodes)
+        """Enhanced map range mapping with type-safe input creation using range node."""
+        return map_node_with_schema_enhanced(node, builder, NODE_SCHEMAS['MAP_RANGE'], 'range', 'color3', constant_manager, exported_nodes)
     
     # Legacy methods for backward compatibility
     @staticmethod
@@ -1716,55 +1714,9 @@ class NodeMapper:
     
     @staticmethod
     def map_color_ramp(node, builder: MaterialXBuilder, input_nodes: Dict, input_nodes_by_index: Dict = None, blender_node=None, constant_manager=None, exported_nodes=None) -> str:
-        """Map ColorRamp node to MaterialX ramp node."""
-        # Create ramp node with proper type - use ramplr since it's the correct MaterialX ramp node
+        """Map ColorRamp node to MaterialX ramplr node."""
+        # Create ramplr node for proper color ramp functionality
         node_name = builder.add_node("ramplr", f"colorramp_{node.name}", "color4")
-        
-        # Extract Color Ramp data from Blender node
-        if hasattr(node, 'color_ramp'):
-            ramp = node.color_ramp
-            
-            # Set interpolation type
-            interpolation_map = {
-                'LINEAR': 0,
-                'CONSTANT': 2,
-                'EASING': 1,
-                'CARDINAL': 1,
-                'B_SPLINE': 1
-            }
-            interpolation = interpolation_map.get(ramp.interpolation, 1)
-            
-            # Get the number of elements (control points)
-            num_elements = len(ramp.elements)
-            num_intervals = max(2, num_elements - 1)  # At least 2 intervals
-            
-            # Set basic ramp properties for ramplr
-            builder.library_builder.node_builder.create_mtlx_input(
-                builder.nodes[node_name], 'interpolation', 
-                value=interpolation,
-                node_type='ramplr', category='color4'
-            )
-            
-            # Map control points for ramplr (uses valuel and valuer for left and right values)
-            if len(ramp.elements) >= 2:
-                first_element = ramp.elements[0]
-                last_element = ramp.elements[-1]
-                
-                # Set left value (first element)
-                color_value_left = [first_element.color[0], first_element.color[1], first_element.color[2], first_element.alpha]
-                builder.library_builder.node_builder.create_mtlx_input(
-                    builder.nodes[node_name], 'valuel', 
-                    value=color_value_left,
-                    node_type='ramplr', category='color4'
-                )
-                
-                # Set right value (last element)
-                color_value_right = [last_element.color[0], last_element.color[1], last_element.color[2], last_element.alpha]
-                builder.library_builder.node_builder.create_mtlx_input(
-                    builder.nodes[node_name], 'valuer', 
-                    value=color_value_right,
-                    node_type='ramplr', category='color4'
-                )
         
         # Connect input if available
         try:

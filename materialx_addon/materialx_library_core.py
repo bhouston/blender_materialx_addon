@@ -1850,10 +1850,13 @@ class MaterialXNodeBuilder:
         # Simple conversions
         if from_type == 'color3' and to_type == 'float':
             return 'in', 'outr'  # separate3: input 'in', output 'outr' (red component)
+        elif from_type == 'vector3' and to_type == 'float':
+            return 'in', 'outx'  # separate3: input 'in', output 'outx' (X component)
         elif from_type == 'color3' and to_type == 'vector3':
             return 'in1', 'out'  # combine3: inputs 'in1', 'in2', 'in3', output 'out'
         elif from_type == 'vector3' and to_type == 'color3':
             return 'in1', 'out'  # combine3: inputs 'in1', 'in2', 'in3', output 'out'
+
         
         # Complex conversions using custom nodes
         elif from_type == 'vector3' and to_type == 'vector2':
@@ -1882,6 +1885,7 @@ class MaterialXNodeBuilder:
                 ('color3', 'float'): 'separate3',  # Extract red channel
                 ('vector3', 'color3'): 'combine3',  # Direct conversion
                 ('color3', 'vector3'): 'combine3',  # Direct conversion
+                ('vector3', 'float'): 'separate3',  # Extract X component
             }
             
             # Complex conversions that need custom nodegraphs
@@ -1903,9 +1907,32 @@ class MaterialXNodeBuilder:
                 conversion_node = parent.addChildOfCategory(node_type, conversion_name)
                 conversion_node.setType(to_type)
                 
-                # Set proper node definition for separate3
+                # Set proper node definition and ensure input port exists
                 if from_type == 'color3' and to_type == 'float':
                     conversion_node.setNodeDefString('ND_separate3_float')
+                    # Ensure input port exists
+                    if not conversion_node.getInput('in'):
+                        conversion_node.addInput('in', from_type)
+                elif from_type == 'vector3' and to_type == 'float':
+                    conversion_node.setNodeDefString('ND_separate3_float')
+                    # Ensure input port exists
+                    if not conversion_node.getInput('in'):
+                        conversion_node.addInput('in', from_type)
+                elif from_type == 'color3' and to_type == 'vector3':
+                    conversion_node.setNodeDefString('ND_combine3_vector3')
+                    # Ensure input ports exist
+                    for i in range(1, 4):
+                        input_name = f'in{i}'
+                        if not conversion_node.getInput(input_name):
+                            conversion_node.addInput(input_name, 'float')
+                elif from_type == 'vector3' and to_type == 'color3':
+                    conversion_node.setNodeDefString('ND_combine3_color3')
+                    # Ensure input ports exist
+                    for i in range(1, 4):
+                        input_name = f'in{i}'
+                        if not conversion_node.getInput(input_name):
+                            conversion_node.addInput(input_name, 'float')
+
                 
                 self.logger.debug(f"Created simple conversion {from_type}->{to_type} using {node_type}: {conversion_name}")
                 return conversion_node
