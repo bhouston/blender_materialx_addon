@@ -51,6 +51,7 @@ class MaterialXLibraryBuilder:
         # Node tracking
         self.nodes = {}
         self.connections = []
+        self.node_counter = 0
         
         # Performance tracking removed
         
@@ -112,6 +113,7 @@ class MaterialXLibraryBuilder:
                         input_elem.setValueString(str(param_value))
             
             self.nodes[name] = node
+            self.node_counter += 1
             self.logger.debug(f"Added node: {name} of type {node_type}")
             return name
             
@@ -135,9 +137,9 @@ class MaterialXLibraryBuilder:
             node_name = self.add_node(node_type, name, **params)
             self.surface_shader = self.nodes[node_name]
             
-            # Connect to material
-            shaderref = self.material.addShaderRef(name, node_type)
-            shaderref.setNodeName(name)
+            # Connect to material using the new MaterialX 1.38+ API
+            # The material should reference the shader node directly
+            # No need for separate shader reference in new API
             
             self.logger.info(f"Added surface shader: {name} of type {node_type}")
             return node_name
@@ -242,15 +244,14 @@ class MaterialXLibraryBuilder:
                 self.logger.error(f"Surface shader node not found: {surface_node_name}")
                 return
             
-            # Update material shader reference
-            for shaderref in self.material.getShaderRefs():
-                if shaderref.getNodeName() == surface_node_name:
-                    self.logger.info(f"Material surface already set to {surface_node_name}")
-                    return
+            # In MaterialX 1.38+, materials directly reference shader nodes
+            # The material should have a 'surfaceshader' input that connects to the surface shader
+            if not self.material.getInput('surfaceshader'):
+                self.material.addInput('surfaceshader', 'surfaceshader')
             
-            # Add new shader reference
-            shaderref = self.material.addShaderRef(surface_node_name, "surface")
-            shaderref.setNodeName(surface_node_name)
+            # Connect the material's surfaceshader input to the surface shader node
+            surfaceshader_input = self.material.getInput('surfaceshader')
+            surfaceshader_input.setConnectedNode(self.nodes[surface_node_name])
             
             self.logger.info(f"Set material surface to {surface_node_name}")
             
@@ -456,6 +457,7 @@ class MaterialXLibraryBuilder:
                         input_elem.setValueString(str(param_value))
             
             self.nodes[name] = node
+            self.node_counter += 1
             self.logger.debug(f"Added custom node: {name} of type {node_type}")
             return name
             
