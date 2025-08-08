@@ -174,11 +174,12 @@ class MaterialExporter(BaseExporter):
                     processed_nodes.add(node.name)  # Mark as processed to avoid infinite retries
                     continue
             
-            # If we have unsupported nodes, log them but don't fail the export
+            # If we have unsupported nodes, fail the export
             if unsupported_nodes:
-                self.logger.warning(f"Found {len(unsupported_nodes)} unsupported nodes, but continuing export")
+                self.logger.error(f"Found {len(unsupported_nodes)} unsupported nodes, export cannot proceed")
                 # Store unsupported nodes for error reporting
                 self.unsupported_nodes = unsupported_nodes
+                return False
             
             # Connect nodes
             success = self._connect_nodes(node_tree, document)
