@@ -356,13 +356,30 @@ class UtilityMapper(BaseNodeMapper):
     def _map_color_ramp_node(self, blender_node: bpy.types.Node, materialx_node: Any):
         """Map a Blender Color Ramp node to MaterialX ramplr."""
         # Color Ramp maps to ramplr (left-to-right ramp)
-        # For now, create a simple ramp - in a full implementation, 
-        # we'd need to extract the ramp stops and positions
+        # Add input for the factor value
+        self._add_input(materialx_node, 'in', 'float', value=0.5)
+        
+        # Add output
         self._add_output(materialx_node, 'out', 'color3')
         
         # Set default values for ramp
-        materialx_node.setInputValue('low', 0.0)
-        materialx_node.setInputValue('high', 1.0)
+        self._add_input(materialx_node, 'low', 'color3', value=(0.0, 0.0, 0.0))
+        self._add_input(materialx_node, 'high', 'color3', value=(1.0, 1.0, 1.0))
+        
+        # Try to extract ramp data from Blender node
+        if hasattr(blender_node, 'color_ramp') and blender_node.color_ramp:
+            # Get the first and last elements of the ramp
+            elements = blender_node.color_ramp.elements
+            if len(elements) >= 2:
+                # First element (low)
+                low_element = elements[0]
+                low_color = (low_element.color[0], low_element.color[1], low_element.color[2])
+                self._add_input(materialx_node, 'low', 'color3', value=low_color)
+                
+                # Last element (high)
+                high_element = elements[-1]
+                high_color = (high_element.color[0], high_element.color[1], high_element.color[2])
+                self._add_input(materialx_node, 'high', 'color3', value=high_color)
     
     def _map_material_output_node(self, blender_node: bpy.types.Node, materialx_node: Any):
         """Map a Blender Material Output node to MaterialX."""

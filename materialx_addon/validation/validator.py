@@ -90,6 +90,12 @@ class MaterialXValidator:
             # Additional validation checks
             self._validate_document_structure(document, results)
             self._validate_node_connections(document, results)
+            self._validate_surface_shader_setup(document, results)
+            self._validate_node_types(document, results)
+            self._validate_default_values(document, results)
+            self._validate_material_structure(document, results)
+            self._validate_texture_coordinates(document, results)
+            self._validate_export_quality(document, results)
     
             
         except Exception as e:
@@ -343,6 +349,11 @@ class MaterialXValidator:
             if nodes:
                 results['statistics']['nodes'] = len(nodes)
             
+            # Check for colorspace declaration
+            colorspace = document.getColorSpace()
+            if not colorspace:
+                results['warnings'].append("No colorspace declaration found - should set colorspace for proper rendering")
+            
         except Exception as e:
             results['errors'].append(f"Structure validation error: {str(e)}")
     
@@ -350,37 +361,254 @@ class MaterialXValidator:
         """Validate node connections."""
         try:
             nodes = document.getNodes()
+            disconnected_nodes = []
+            orphaned_inputs = []
+            
             for node in nodes:
+                node_has_connections = False
+                
                 for input_elem in node.getInputs():
                     if input_elem.getNodeName():
+                        node_has_connections = True
                         # Check if referenced node exists
                         referenced_node = document.getNode(input_elem.getNodeName())
                         if not referenced_node:
                             results['warnings'].append(f"Node '{node.getName()}' references non-existent node '{input_elem.getNodeName()}'")
+                    elif not input_elem.getValueString() and not input_elem.getConnectedOutput():
+                        # Input has no value and no connection
+                        orphaned_inputs.append(f"Node '{node.getName()}' input '{input_elem.getName()}' has no value or connection")
+                
+                if not node_has_connections and node.getType() != "standard_surface":
+                    disconnected_nodes.append(node.getName())
+            
+            if disconnected_nodes:
+                results['warnings'].append(f"Found {len(disconnected_nodes)} disconnected nodes: {', '.join(disconnected_nodes[:5])}")
+            
+            if orphaned_inputs:
+                results['warnings'].append(f"Found {len(orphaned_inputs)} inputs without values or connections")
             
         except Exception as e:
             results['errors'].append(f"Connection validation error: {str(e)}")
     
-
+    def _validate_surface_shader_setup(self, document: mx.Document, results: Dict[str, Any]):
+        """Validate surface shader setup and connections."""
+        try:
+            # Check for surface shader nodes
+            surface_shaders = []
+            for node in document.getNodes():
+                if node.getType() == "standard_surface":
+                    surface_shaders.append(node.getName())
+            
+            if not surface_shaders:
+                results['errors'].append("No standard_surface nodes found - material will not render properly")
+                return
+            
+            # Check material connections to surface shaders
+            materials = document.getMaterials()
+            for material in materials:
+                material_has_shader = False
+                for input_elem in material.getInputs():
+                    if input_elem.getType() == "surfaceshader" and input_elem.getNodeName():
+                        material_has_shader = True
+                        # Verify the referenced node is a surface shader
+                        shader_node = document.getNode(input_elem.getNodeName())
+                        if shader_node and shader_node.getType() != "standard_surface":
+                            results['errors'].append(f"Material '{material.getName()}' connected to non-surface-shader node '{input_elem.getNodeName()}'")
+                        break
+                
+                if not material_has_shader:
+                    results['errors'].append(f"Material '{material.getName()}' has no surfaceshader input connection")
+            
+        except Exception as e:
+            results['errors'].append(f"Surface shader validation error: {str(e)}")
+    
+    def _validate_node_types(self, document: mx.Document, results: Dict[str, Any]):
+        """Validate correct node types and categories."""
+        try:
+            for node in document.getNodes():
+                node_type = node.getType()
+                node_category = node.getCategory()
+                
+                # Check for incorrect node types
+                if node_type == "standard_surface":
+                    if node_category != "surfaceshader":
+                        results['warnings'].append(f"Standard surface node '{node.getName()}' has incorrect category '{node_category}' (should be 'surfaceshader')")
+                
+                # Check for surface nodes that should be surfaceshader
+                if node_type == "surface" and node_category == "surface":
+                    results['warnings'].append(f"Node '{node.getName()}' uses deprecated 'surface' type (should be 'surfaceshader')")
+            
+        except Exception as e:
+            results['errors'].append(f"Node type validation error: {str(e)}")
+    
+    def _validate_default_values(self, document: mx.Document, results: Dict[str, Any]):
+        """Validate that nodes have appropriate default values."""
+        try:
+            for node in document.getNodes():
+                node_type = node.getType()
+                
+                # Check standard_surface nodes for essential inputs
+                if node_type == "standard_surface":
+                    essential_inputs = ['base_color', 'base', 'specular_roughness']
+                    for input_name in essential_inputs:
+                        input_elem = node.getInput(input_name)
+                        if input_elem:
+                            value = input_elem.getValueString()
+                            if not value and not input_elem.getNodeName():
+                                results['warnings'].append(f"Standard surface node '{node.getName()}' missing default value for '{input_name}'")
+                
+                # Check constant nodes for values
+                elif node_type in ['constant', 'ramplr', 'ramp4']:
+                    has_value = False
+                    for input_elem in node.getInputs():
+                        if input_elem.getValueString() or input_elem.getNodeName():
+                            has_value = True
+                            break
+                    
+                    if not has_value:
+                        results['warnings'].append(f"Constant node '{node.getName()}' has no values or connections")
+            
+        except Exception as e:
+            results['errors'].append(f"Default value validation error: {str(e)}")
+    
+    def _validate_material_structure(self, document: mx.Document, results: Dict[str, Any]):
+        """Validate proper material structure."""
+        try:
+            materials = document.getMaterials()
+            
+            for material in materials:
+                # Check for surfaceshader input
+                surfaceshader_input = None
+                for input_elem in material.getInputs():
+                    if input_elem.getType() == "surfaceshader":
+                        surfaceshader_input = input_elem
+                        break
+                
+                if not surfaceshader_input:
+                    results['errors'].append(f"Material '{material.getName()}' missing surfaceshader input")
+                elif not surfaceshader_input.getNodeName():
+                    results['errors'].append(f"Material '{material.getName()}' surfaceshader input not connected to any node")
+                
+                # Check for proper material type
+                if material.getType() != "material":
+                    results['warnings'].append(f"Material '{material.getName()}' has incorrect type '{material.getType()}' (should be 'material')")
+            
+        except Exception as e:
+            results['errors'].append(f"Material structure validation error: {str(e)}")
+    
+    def _validate_texture_coordinates(self, document: mx.Document, results: Dict[str, Any]):
+        """Validate texture coordinate setup."""
+        try:
+            # Check for texture nodes without texcoord inputs
+            texture_nodes = []
+            for node in document.getNodes():
+                if node.getType() in ['image', 'noise2d', 'checker2d', 'brick2d', 'voronoi2d', 'wave2d', 'musgrave2d']:
+                    texture_nodes.append(node)
+            
+            for node in texture_nodes:
+                texcoord_input = node.getInput('texcoord')
+                if texcoord_input and not texcoord_input.getNodeName():
+                    results['warnings'].append(f"Texture node '{node.getName()}' has texcoord input but no connection")
+            
+        except Exception as e:
+            results['errors'].append(f"Texture coordinate validation error: {str(e)}")
+    
+    def _validate_export_quality(self, document: mx.Document, results: Dict[str, Any]):
+        """Validate overall export quality and provide recommendations."""
+        try:
+            # Count different types of issues
+            issue_counts = {
+                'missing_connections': 0,
+                'missing_values': 0,
+                'incorrect_types': 0,
+                'orphaned_nodes': 0
+            }
+            
+            # Analyze node connectivity
+            nodes = document.getNodes()
+            connected_nodes = 0
+            for node in nodes:
+                has_connection = False
+                for input_elem in node.getInputs():
+                    if input_elem.getNodeName() or input_elem.getValueString():
+                        has_connection = True
+                        break
+                if has_connection:
+                    connected_nodes += 1
+            
+            if nodes:
+                connection_ratio = connected_nodes / len(nodes)
+                if connection_ratio < 0.5:
+                    results['warnings'].append(f"Low node connectivity ({connection_ratio:.1%}) - many nodes may be disconnected")
+            
+            # Check for common export issues
+            materials = document.getMaterials()
+            surface_shaders = [n for n in nodes if n.getType() == "standard_surface"]
+            
+            if not materials:
+                results['errors'].append("No materials found - export may be incomplete")
+            
+            if not surface_shaders:
+                results['errors'].append("No surface shaders found - material will not render")
+            
+            if materials and not surface_shaders:
+                results['errors'].append("Materials exist but no surface shaders - materials cannot render")
+            
+            # Check for proper material-shader connections
+            for material in materials:
+                has_shader_connection = False
+                for input_elem in material.getInputs():
+                    if input_elem.getType() == "surfaceshader" and input_elem.getNodeName():
+                        has_shader_connection = True
+                        break
+                
+                if not has_shader_connection:
+                    results['errors'].append(f"Material '{material.getName()}' not connected to any surface shader")
+            
+            # Provide quality score
+            quality_score = 100
+            if results['errors']:
+                quality_score -= len(results['errors']) * 20
+            if results['warnings']:
+                quality_score -= len(results['warnings']) * 5
+            
+            quality_score = max(0, quality_score)
+            results['statistics']['quality_score'] = quality_score
+            
+            if quality_score < 50:
+                results['warnings'].append(f"Low export quality score ({quality_score}/100) - review validation results")
+            elif quality_score < 80:
+                results['info'].append(f"Export quality score: {quality_score}/100 - some issues detected")
+            else:
+                results['info'].append(f"Export quality score: {quality_score}/100 - good quality")
+            
+        except Exception as e:
+            results['errors'].append(f"Export quality validation error: {str(e)}")
     
     def get_validation_summary(self, results: Dict[str, Any]) -> str:
         """Get a summary of validation results."""
         summary = f"MaterialX Validation Summary\n"
         summary += f"Version: {results.get('version', 'Unknown')}\n"
         summary += f"Status: {'VALID' if results['valid'] else 'INVALID'}\n"
+        summary += f"Quality Score: {results.get('statistics', {}).get('quality_score', 'N/A')}/100\n"
         summary += f"Errors: {len(results['errors'])}\n"
         summary += f"Warnings: {len(results['warnings'])}\n"
         summary += f"Info: {len(results['info'])}\n"
         
         if results['errors']:
-            summary += "\nErrors:\n"
+            summary += "\nCritical Issues:\n"
             for error in results['errors'][:5]:
-                summary += f"  - {error}\n"
+                summary += f"  ❌ {error}\n"
         
         if results['warnings']:
             summary += "\nWarnings:\n"
             for warning in results['warnings'][:5]:
-                summary += f"  - {warning}\n"
+                summary += f"  ⚠️  {warning}\n"
+        
+        if results['info']:
+            summary += "\nInfo:\n"
+            for info in results['info'][:3]:
+                summary += f"  ℹ️  {info}\n"
         
         return summary
     

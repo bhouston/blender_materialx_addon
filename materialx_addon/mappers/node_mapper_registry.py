@@ -259,7 +259,7 @@ class NodeMapperRegistry:
                 'RGB': UtilityMapper,
                 'VALUE': UtilityMapper,
                 'VALTORGB': UtilityMapper,  # Color Ramp
-                'OUTPUT_MATERIAL': UtilityMapper,  # Material Output (should be ignored but mapped)
+                # Note: OUTPUT_MATERIAL is intentionally not mapped as it should be ignored during export
             }
             
             self.register_mappers(default_mappers)

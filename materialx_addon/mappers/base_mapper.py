@@ -266,73 +266,12 @@ class BaseNodeMapper(ABC):
         Returns:
             Proper MaterialX node name
         """
-        # Map common MaterialX node types to proper names
-        type_to_name = {
-            'standard_surface': 'standard_surface',
-            'mix': 'mix',
-            'add': 'add',
-            'subtract': 'subtract',
-            'multiply': 'multiply',
-            'divide': 'divide',
-            'modulo': 'modulo',
-            'ifgreater': 'ifgreater',
-            'texcoord': 'texcoord',
-            'noise2d': 'noise2d',
-            'checker2d': 'checker2d',
-            'ramp2d': 'ramp2d',
-            'brick2d': 'brick2d',
-            'voronoi2d': 'voronoi2d',
-            'wave2d': 'wave2d',
-            'musgrave2d': 'musgrave2d',
-            'image': 'image',
-            'constant': 'constant',
-            'separate3': 'separate3',
-            'combine3': 'combine3',
-            'invert': 'invert',
-            'normalmap': 'normalmap',
-            'bump': 'bump',
-            'place2d': 'place2d',
-            'layer': 'layer',
-            'hsvtorgb': 'hsvtorgb',
-            'rgbtohsv': 'rgbtohsv',
-            'ramplr': 'ramplr',
-            'position': 'position',
-            'absval': 'absval',
-            'sign': 'sign',
-            'floor': 'floor',
-            'ceil': 'ceil',
-            'round': 'round',
-            'power': 'power',
-            'safepower': 'safepower',
-            'sin': 'sin',
-            'cos': 'cos',
-            'tan': 'tan',
-            'asin': 'asin',
-            'acos': 'acos',
-            'atan2': 'atan2',
-            'sqrt': 'sqrt',
-            'ln': 'ln',
-            'exp': 'exp',
-            'clamp': 'clamp',
-            'min': 'min',
-            'max': 'max',
-            'normalize': 'normalize',
-            'magnitude': 'magnitude',
-            'distance': 'distance',
-            'dotproduct': 'dotproduct',
-            'crossproduct': 'crossproduct',
-            'transformpoint': 'transformpoint',
-            'transformvector': 'transformvector',
-            'transformnormal': 'transformnormal'
-        }
+        # Sanitize the Blender name for MaterialX
+        sanitized_blender_name = blender_name.replace(' ', '_').replace('(', '').replace(')', '').replace('.', '_')
         
-        # Use the MaterialX type name if available, otherwise use a sanitized version of the Blender name
-        if materialx_type in type_to_name:
-            return type_to_name[materialx_type]
-        else:
-            # Sanitize the Blender name for MaterialX
-            sanitized = blender_name.replace(' ', '_').replace('(', '').replace(')', '').replace('.', '_')
-            return sanitized.lower()
+        # Always include the sanitized Blender name to ensure uniqueness
+        # Add a prefix based on the MaterialX type for clarity
+        return f"{materialx_type}_{sanitized_blender_name}"
     
     def _get_unique_node_name(self, document: mx.Document, base_name: str, node_type: str) -> str:
         """

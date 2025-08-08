@@ -10,6 +10,7 @@ import bpy
 import MaterialX as mx
 from .base_exporter import BaseExporter
 from ..mappers.node_mapper_registry import get_registry
+from ..validation.validator import MaterialXValidator
 
 
 class MaterialExporter(BaseExporter):
@@ -62,6 +63,15 @@ class MaterialExporter(BaseExporter):
             success = self._save_document(document, export_path)
             if not success:
                 return False
+            
+            # Validate the exported document
+            validation_results = self._validate_exported_document(document, export_path)
+            if validation_results:
+                self.logger.info("Export validation completed")
+                if validation_results.get('valid', False):
+                    self.logger.info(f"✅ Export quality score: {validation_results.get('statistics', {}).get('quality_score', 'N/A')}/100")
+                else:
+                    self.logger.warning("⚠️ Export completed but validation found issues")
             
             # Post-export operations
             return self.post_export(export_path)
@@ -117,6 +127,11 @@ class MaterialExporter(BaseExporter):
                 if node.name in processed_nodes:
                     continue
                 
+                # Skip Material Output nodes - they're not needed in MaterialX
+                if node.type == 'OUTPUT_MATERIAL':
+                    processed_nodes.add(node.name)
+                    continue
+                
                 # Check if node is supported
                 if not self.node_registry.can_map_node(node):
                     unsupported_nodes.append({
@@ -134,21 +149,30 @@ class MaterialExporter(BaseExporter):
                         processed_nodes.add(node.name)
                         continue
                     
+                    self.logger.debug(f"Attempting to export node: {node.name} (type: {node.type})")
+                    
+                    # Get the mapper for this node
+                    mapper = self.node_registry.get_mapper_for_node(node)
+                    if mapper:
+                        self.logger.debug(f"Found mapper: {mapper.__class__.__name__}")
+                    else:
+                        self.logger.error(f"No mapper found for node type: {node.type}")
+                        continue
+                    
                     materialx_node = self.node_registry.map_node(node, document, self.exported_nodes)
                     self.exported_nodes[node.name] = materialx_node.getName()
                     processed_nodes.add(node.name)
-                    self.logger.debug(f"Exported node: {node.name} -> {materialx_node.getName()}")
+                    self.logger.debug(f"Successfully exported node: {node.name} -> {materialx_node.getName()}")
                 except Exception as e:
                     self.logger.error(f"Failed to export node {node.name}: {e}")
                     processed_nodes.add(node.name)  # Mark as processed to avoid infinite retries
                     continue
             
-            # If we have unsupported nodes, fail the export
+            # If we have unsupported nodes, log them but don't fail the export
             if unsupported_nodes:
-                self.logger.error(f"Export failed: Found {len(unsupported_nodes)} unsupported nodes")
+                self.logger.warning(f"Found {len(unsupported_nodes)} unsupported nodes, but continuing export")
                 # Store unsupported nodes for error reporting
                 self.unsupported_nodes = unsupported_nodes
-                return False
             
             # Connect nodes
             success = self._connect_nodes(node_tree, document)
@@ -320,6 +344,41 @@ class MaterialExporter(BaseExporter):
         except Exception as e:
             self.logger.error(f"Failed to write document manually: {e}")
             raise
+    
+    def _validate_exported_document(self, document: mx.Document, export_path: str) -> Optional[Dict[str, Any]]:
+        """Validate the exported MaterialX document."""
+        try:
+            validator = MaterialXValidator(self.logger)
+            validation_results = validator.validate_document(document, verbose=True)
+            
+            if validation_results:
+                self.logger.info(f"Validation results for {export_path}:")
+                
+                # Log validation summary
+                if validation_results.get('valid', False):
+                    self.logger.info("✅ Document is valid")
+                else:
+                    self.logger.warning("⚠️ Document has validation issues")
+                
+                # Log errors and warnings
+                for error in validation_results.get('errors', []):
+                    self.logger.error(f"Validation error: {error}")
+                
+                for warning in validation_results.get('warnings', []):
+                    self.logger.warning(f"Validation warning: {warning}")
+                
+                # Log quality score if available
+                quality_score = validation_results.get('statistics', {}).get('quality_score', None)
+                if quality_score is not None:
+                    self.logger.info(f"Export quality score: {quality_score}/100")
+                
+                return validation_results
+            else:
+                self.logger.info(f"No validation issues found for {export_path}")
+                return None
+        except Exception as e:
+            self.logger.error(f"Failed to validate document {export_path}: {e}")
+            return None
     
     def get_default_options(self) -> Dict[str, Any]:
         """Get default export options."""
