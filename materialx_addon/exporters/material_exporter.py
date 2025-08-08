@@ -95,6 +95,9 @@ class MaterialExporter(BaseExporter):
             if not success:
                 return False
             
+            # Debug: List all exported nodes
+            self.logger.debug(f"Exported nodes: {self.exported_nodes}")
+            
             # Find the main surface shader node
             surface_shader_node = self._find_surface_shader_node(document)
             if not surface_shader_node:
@@ -116,7 +119,7 @@ class MaterialExporter(BaseExporter):
     def _export_nodes(self, node_tree: bpy.types.NodeTree, document: mx.Document) -> bool:
         """Export nodes from a Blender node tree to MaterialX."""
         try:
-            self.logger.debug(f"Exporting {len(node_tree.nodes)} nodes")
+            self.logger.info(f"Exporting {len(node_tree.nodes)} nodes")
             
             # Track processed and unsupported nodes
             processed_nodes = set()
@@ -132,8 +135,11 @@ class MaterialExporter(BaseExporter):
                     processed_nodes.add(node.name)
                     continue
                 
+                self.logger.info(f"Processing node: {node.name} (type: {node.type})")
+                
                 # Check if node is supported
                 if not self.node_registry.can_map_node(node):
+                    self.logger.warning(f"Node {node.name} (type: {node.type}) is not supported")
                     unsupported_nodes.append({
                         'name': node.name,
                         'type': node.type,
@@ -145,16 +151,16 @@ class MaterialExporter(BaseExporter):
                 try:
                     # Check if node already exists in exported_nodes
                     if node.name in self.exported_nodes:
-                        self.logger.debug(f"Node {node.name} already exported, skipping")
+                        self.logger.info(f"Node {node.name} already exported, skipping")
                         processed_nodes.add(node.name)
                         continue
                     
-                    self.logger.debug(f"Attempting to export node: {node.name} (type: {node.type})")
+                    self.logger.info(f"Attempting to export node: {node.name} (type: {node.type})")
                     
                     # Get the mapper for this node
                     mapper = self.node_registry.get_mapper_for_node(node)
                     if mapper:
-                        self.logger.debug(f"Found mapper: {mapper.__class__.__name__}")
+                        self.logger.info(f"Found mapper: {mapper.__class__.__name__}")
                     else:
                         self.logger.error(f"No mapper found for node type: {node.type}")
                         continue
@@ -162,7 +168,7 @@ class MaterialExporter(BaseExporter):
                     materialx_node = self.node_registry.map_node(node, document, self.exported_nodes)
                     self.exported_nodes[node.name] = materialx_node.getName()
                     processed_nodes.add(node.name)
-                    self.logger.debug(f"Successfully exported node: {node.name} -> {materialx_node.getName()}")
+                    self.logger.info(f"Successfully exported node: {node.name} -> {materialx_node.getName()}")
                 except Exception as e:
                     self.logger.error(f"Failed to export node {node.name}: {e}")
                     processed_nodes.add(node.name)  # Mark as processed to avoid infinite retries
@@ -252,12 +258,33 @@ class MaterialExporter(BaseExporter):
     def _find_surface_shader_node(self, document: mx.Document) -> Optional[Any]:
         """Find the main surface shader node in the document."""
         try:
-            # Look for standard_surface nodes
-            for node_name, materialx_node_name in self.exported_nodes.items():
-                materialx_node = document.getNode(materialx_node_name)
-                if materialx_node and materialx_node.getType() == "standard_surface":
+            # First, search all nodes in document for standard_surface
+            self.logger.info("Searching all document nodes for standard_surface...")
+            all_nodes = list(document.getNodes())
+            self.logger.info(f"Found {len(all_nodes)} nodes in document")
+            for materialx_node in all_nodes:
+                self.logger.info(f"Document node: {materialx_node.getName()} (type: {materialx_node.getType()})")
+                if materialx_node.getType() == "standard_surface" or materialx_node.getType() == "surfaceshader":
+                    self.logger.info(f"Found surface shader node in document: {materialx_node.getName()}")
                     return materialx_node
             
+            # If not found in document nodes, check exported_nodes
+            self.logger.info(f"Checking exported_nodes: {self.exported_nodes}")
+            for node_name, materialx_element_name in self.exported_nodes.items():
+                try:
+                    materialx_element = document.getNode(materialx_element_name)
+                    if materialx_element:
+                        self.logger.info(f"Found exported node: {materialx_element.getName()} (type: {materialx_element.getType()})")
+                        if materialx_element.getType() == "standard_surface" or materialx_element.getType() == "surfaceshader":
+                            self.logger.info(f"Found standard_surface node in exported_nodes: {materialx_element.getName()}")
+                            return materialx_element
+                    else:
+                        self.logger.warning(f"Could not find exported node: {materialx_element_name}")
+                except Exception as e:
+                    self.logger.warning(f"Error checking exported node {materialx_element_name}: {e}")
+                    continue
+            
+            self.logger.error("No standard_surface element found in document")
             return None
             
         except Exception as e:
@@ -268,8 +295,13 @@ class MaterialExporter(BaseExporter):
                                    document: mx.Document) -> bool:
         """Create a MaterialX material and connect it to the surface shader."""
         try:
-            # Create the material
-            material = document.addMaterial(material_name)
+            # Try to create the surfacematerial element directly
+            try:
+                material = document.addChildOfCategory("surfacematerial", material_name)
+                material.setType("material")
+            except AttributeError:
+                # Fallback to addMaterial
+                material = document.addMaterial(material_name)
             
             # Add the surfaceshader input and connect it to the surface shader node
             shader_input = material.addInput("surfaceshader", "surfaceshader")

@@ -269,8 +269,11 @@ class BaseNodeMapper(ABC):
         # Sanitize the Blender name for MaterialX
         sanitized_blender_name = blender_name.replace(' ', '_').replace('(', '').replace(')', '').replace('.', '_')
         
-        # Always include the sanitized Blender name to ensure uniqueness
-        # Add a prefix based on the MaterialX type for clarity
+        # For surface shaders, use a simpler naming scheme to avoid conflicts
+        if materialx_type == "standard_surface":
+            return f"surface_{sanitized_blender_name}"
+        
+        # For other nodes, include the type for clarity
         return f"{materialx_type}_{sanitized_blender_name}"
     
     def _get_unique_node_name(self, document: mx.Document, base_name: str, node_type: str) -> str:
@@ -350,7 +353,11 @@ class BaseNodeMapper(ABC):
                     else:
                         input_port.setValueString("0.0")
                 else:
-                    input_port.setValueString(str(value))
+                    # Handle boolean values properly
+                    if input_type == 'boolean':
+                        input_port.setValueString(str(value).lower())
+                    else:
+                        input_port.setValueString(str(value))
             
             self.logger.debug(f"Added input to {materialx_node.getName()}: {input_name} ({input_type})")
             return input_port
