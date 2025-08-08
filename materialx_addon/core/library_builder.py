@@ -64,7 +64,8 @@ class MaterialXLibraryBuilder:
     def _initialize_document(self):
         """Initialize the MaterialX document."""
         try:
-            self.document = self.document_manager.create_document()
+            # Create a clean document for export
+            self.document = self.document_manager.create_clean_document()
             
             # Create main nodegraph
             self.nodegraph = self.document.addNodeGraph(f"{self.material_name}_graph")
@@ -74,7 +75,7 @@ class MaterialXLibraryBuilder:
             self.material = self.document.addMaterial(self.material_name)
             self.material.setAttribute("description", f"Material: {self.material_name}")
             
-            self.logger.info(f"Initialized MaterialX document for {self.material_name}")
+            self.logger.info(f"Initialized clean MaterialX document for {self.material_name}")
             
         except Exception as e:
             self.logger.error(f"Failed to initialize MaterialX document: {str(e)}")

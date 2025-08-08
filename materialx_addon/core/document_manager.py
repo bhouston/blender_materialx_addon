@@ -115,6 +115,90 @@ class MaterialXDocumentManager:
             self.logger.error(f"Failed to create MaterialX document: {str(e)}")
             raise
     
+    def create_clean_document(self) -> mx.Document:
+        """
+        Create a new MaterialX document without library includes for export.
+        
+        Returns:
+            mx.Document: The created document
+        """
+        try:
+            self.logger.info("Creating clean MaterialX document for export")
+            
+            # Create working document
+            self.document = mx.createDocument()
+            
+            # Set colorspace attribute (required for MaterialX compliance)
+            self.document.setColorSpace("lin_rec709")
+            
+            # Create a completely clean document with no library imports
+            # Libraries will only be used for validation, not in the export
+            
+            self.logger.info(f"Clean document created without any library includes")
+            
+            # Initialize custom node definitions manager (lazy initialization)
+            self._initialize_custom_node_manager()
+            
+            return self.document
+            
+        except Exception as e:
+            self.logger.error(f"Failed to create clean MaterialX document: {str(e)}")
+            raise
+    
+    def _remove_library_includes(self):
+        """
+        Remove all xi:include elements from the document to make it portable.
+        """
+        try:
+            # Get all elements in the document
+            elements = self.document.getChildren()
+            
+            # Find and remove xi:include elements
+            includes_to_remove = []
+            for element in elements:
+                # Check if it's an xi:include element by looking at the element type
+                if hasattr(element, 'getCategory') and element.getCategory() == "xi:include":
+                    includes_to_remove.append(element)
+                # Also check by name pattern
+                elif hasattr(element, 'getName') and element.getName().startswith('xi:include'):
+                    includes_to_remove.append(element)
+            
+            # Remove the includes
+            for include in includes_to_remove:
+                try:
+                    self.document.removeChild(include.getName())
+                except:
+                    # Try alternative removal method
+                    try:
+                        self.document.removeChild(include)
+                    except:
+                        self.logger.warning(f"Could not remove include: {include.getName() if hasattr(include, 'getName') else str(include)}")
+            
+            self.logger.info(f"Removed {len(includes_to_remove)} library includes from document")
+            
+        except Exception as e:
+            self.logger.warning(f"Failed to remove library includes: {str(e)}")
+            
+        # Alternative approach: Create a new document without includes
+        try:
+            # Create a new clean document
+            clean_doc = mx.createDocument()
+            clean_doc.setColorSpace("lin_rec709")
+            
+            # Copy only the elements we want (materials, nodegraphs, etc.)
+            for element in self.document.getChildren():
+                if element.getCategory() not in ["xi:include"]:
+                    # Clone the element to the new document
+                    clean_doc.importLibrary(self.document)
+                    break  # importLibrary copies all non-include elements
+            
+            # Replace the document
+            self.document = clean_doc
+            self.logger.info("Created clean document without library includes")
+            
+        except Exception as e:
+            self.logger.warning(f"Failed to create clean document: {str(e)}")
+    
     def get_node_definition(self, node_type: str, category: str = None) -> Optional[mx.NodeDef]:
         """
         Get a node definition by type and optional category.
