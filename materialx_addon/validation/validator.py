@@ -393,14 +393,21 @@ class MaterialXValidator:
     def _validate_surface_shader_setup(self, document: mx.Document, results: Dict[str, Any]):
         """Validate surface shader setup and connections."""
         try:
-            # Check for surface shader nodes
+            # Check for surface shader elements (only direct standard_surface elements are valid)
             surface_shaders = []
+            
+            # Check for standard_surface elements (direct elements, not nodes)
+            for elem in document.getChildren():
+                if elem.getCategory() == "standard_surface":
+                    surface_shaders.append(elem.getName())
+            
+            # Check for incorrect node-based standard_surface usage
             for node in document.getNodes():
                 if node.getType() == "standard_surface":
-                    surface_shaders.append(node.getName())
+                    results['errors'].append(f"Invalid standard_surface node '{node.getName()}' found - standard_surface should be a direct element, not a node")
             
             if not surface_shaders:
-                results['errors'].append("No standard_surface nodes found - material will not render properly")
+                results['errors'].append("No standard_surface elements found - material will not render properly")
                 return
             
             # Check material connections to surface shaders
@@ -410,10 +417,16 @@ class MaterialXValidator:
                 for input_elem in material.getInputs():
                     if input_elem.getType() == "surfaceshader" and input_elem.getNodeName():
                         material_has_shader = True
-                        # Verify the referenced node is a surface shader
-                        shader_node = document.getNode(input_elem.getNodeName())
-                        if shader_node and shader_node.getType() != "standard_surface":
-                            results['errors'].append(f"Material '{material.getName()}' connected to non-surface-shader node '{input_elem.getNodeName()}'")
+                        # Verify the referenced element is a surface shader
+                        shader_elem = document.getChild(input_elem.getNodeName())
+                        if shader_elem:
+                            if shader_elem.getCategory() == "standard_surface":
+                                # This is a correct direct standard_surface element
+                                break
+                            else:
+                                results['errors'].append(f"Material '{material.getName()}' connected to non-standard_surface element '{input_elem.getNodeName()}' (type: {shader_elem.getCategory()})")
+                        else:
+                            results['warnings'].append(f"Material '{material.getName()}' references non-existent surface shader '{input_elem.getNodeName()}'")
                         break
                 
                 if not material_has_shader:
@@ -429,10 +442,9 @@ class MaterialXValidator:
                 node_type = node.getType()
                 node_category = node.getCategory()
                 
-                # Check for incorrect node types
+                # Check for incorrect standard_surface nodes (should be direct elements, not nodes)
                 if node_type == "standard_surface":
-                    if node_category != "surfaceshader":
-                        results['warnings'].append(f"Standard surface node '{node.getName()}' has incorrect category '{node_category}' (should be 'surfaceshader')")
+                    results['errors'].append(f"Invalid standard_surface node '{node.getName()}' found - standard_surface should be a direct element, not a node")
                 
                 # Check for surface nodes that should be surfaceshader
                 if node_type == "surface" and node_category == "surface":
@@ -516,14 +528,6 @@ class MaterialXValidator:
     def _validate_export_quality(self, document: mx.Document, results: Dict[str, Any]):
         """Validate overall export quality and provide recommendations."""
         try:
-            # Count different types of issues
-            issue_counts = {
-                'missing_connections': 0,
-                'missing_values': 0,
-                'incorrect_types': 0,
-                'orphaned_nodes': 0
-            }
-            
             # Analyze node connectivity
             nodes = document.getNodes()
             connected_nodes = 0
@@ -543,7 +547,14 @@ class MaterialXValidator:
             
             # Check for common export issues
             materials = document.getMaterials()
-            surface_shaders = [n for n in nodes if n.getType() == "standard_surface"]
+            
+            # Check for surface shaders (only direct standard_surface elements are valid)
+            surface_shaders = [e for e in document.getChildren() if e.getCategory() == "standard_surface"]
+            
+            # Check for incorrect node-based standard_surface usage
+            invalid_nodes = [n for n in nodes if n.getType() == "standard_surface"]
+            if invalid_nodes:
+                results['errors'].append(f"Found {len(invalid_nodes)} invalid standard_surface nodes - standard_surface should be direct elements, not nodes")
             
             if not materials:
                 results['errors'].append("No materials found - export may be incomplete")
@@ -565,23 +576,6 @@ class MaterialXValidator:
                 if not has_shader_connection:
                     results['errors'].append(f"Material '{material.getName()}' not connected to any surface shader")
             
-            # Provide quality score
-            quality_score = 100
-            if results['errors']:
-                quality_score -= len(results['errors']) * 20
-            if results['warnings']:
-                quality_score -= len(results['warnings']) * 5
-            
-            quality_score = max(0, quality_score)
-            results['statistics']['quality_score'] = quality_score
-            
-            if quality_score < 50:
-                results['warnings'].append(f"Low export quality score ({quality_score}/100) - review validation results")
-            elif quality_score < 80:
-                results['info'].append(f"Export quality score: {quality_score}/100 - some issues detected")
-            else:
-                results['info'].append(f"Export quality score: {quality_score}/100 - good quality")
-            
         except Exception as e:
             results['errors'].append(f"Export quality validation error: {str(e)}")
     
@@ -590,7 +584,6 @@ class MaterialXValidator:
         summary = f"MaterialX Validation Summary\n"
         summary += f"Version: {results.get('version', 'Unknown')}\n"
         summary += f"Status: {'VALID' if results['valid'] else 'INVALID'}\n"
-        summary += f"Quality Score: {results.get('statistics', {}).get('quality_score', 'N/A')}/100\n"
         summary += f"Errors: {len(results['errors'])}\n"
         summary += f"Warnings: {len(results['warnings'])}\n"
         summary += f"Info: {len(results['info'])}\n"

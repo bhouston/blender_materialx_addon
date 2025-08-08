@@ -1,0 +1,7 @@
+<?xml version="1.0"?>
+<materialx version="1.39" colorspace="lin_rec709">
+  <!-- BAD: No surface shader defined -->
+  <surfacematerial name="TestMaterial" type="material">
+    <!-- Missing surfaceshader input -->
+  </surfacematerial>
+</materialx>

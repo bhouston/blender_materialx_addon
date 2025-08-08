@@ -1,0 +1,12 @@
+<?xml version="1.0"?>
+<materialx version="1.39" colorspace="lin_rec709">
+  <!-- BAD: Invalid XML - unclosed tag -->
+  <standard_surface name="incomplete_surface" type="surfaceshader">
+    <input name="base" type="float" value="1.0" />
+    <input name="base_color" type="color3" value="0.8, 0.8, 0.8" />
+    <!-- Missing closing tag for standard_surface -->
+  
+  <surfacematerial name="TestMaterial" type="material">
+    <input name="surfaceshader" type="surfaceshader" nodename="incomplete_surface" />
+  </surfacematerial>
+</materialx>

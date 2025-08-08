@@ -1,0 +1,14 @@
+<?xml version="1.0"?>
+<materialx version="1.39" colorspace="lin_rec709">
+  <!-- Good: Correct standard_surface element -->
+  <standard_surface name="correct_surface" type="surfaceshader">
+    <input name="base" type="float" value="1.0" />
+    <input name="base_color" type="color3" value="0.8, 0.8, 0.8" />
+    <input name="specular_roughness" type="float" value="0.2" />
+  </standard_surface>
+  
+  <!-- BAD: Material has no surfaceshader input connection -->
+  <surfacematerial name="TestMaterial" type="material">
+    <!-- Missing surfaceshader input -->
+  </surfacematerial>
+</materialx>

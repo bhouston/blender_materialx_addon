@@ -10,7 +10,7 @@ The MaterialX addon includes a comprehensive test suite with multiple levels of 
 
 1. **Unit Tests** - Test individual components in isolation
 2. **Integration Tests** - Test component interactions
-
+3. **Reference Validation Tests** - Test validator against known good MaterialX files
 4. **End-to-End Tests** - Test complete workflows
 
 ### Test Files Structure
@@ -60,7 +60,44 @@ Run integration tests (requires addon to be installed):
 python3 integration_tests.py
 ```
 
-### 4. Quick Tests in Blender Console
+### 4. Reference Validation Tests
+
+Test the MaterialX validator against known good reference files:
+
+```bash
+python3 reference_validation_tests.py
+```
+
+This test:
+- Validates all MaterialX files in `MaterialX_Reference/StandardSurface/`
+- Ensures the validator correctly identifies valid files
+- Runs within Blender's environment (required for MaterialX library)
+- Reports any validation errors that indicate bugs in the validator
+- **Validates MaterialX specification compliance**: Ensures only correct patterns are accepted
+- **Rejects invalid patterns**: Identifies incorrect `standard_surface` node usage (should be direct elements)
+
+### 5. Bad Examples Validation Tests
+
+Test the MaterialX validator against intentionally bad files:
+
+```bash
+python3 bad_examples_validation_tests.py
+```
+
+This test:
+- Validates all MaterialX files in `MaterialX_Reference/BadExamples/`
+- Ensures the validator correctly identifies various types of errors
+- Tests error detection for:
+  - Invalid `standard_surface` node usage
+  - Missing surface shaders
+  - Incorrect material-shader connections
+  - Non-existent shader references
+  - Disconnected nodes
+  - Missing default values
+  - Invalid XML structure
+- Runs within Blender's environment (required for MaterialX library)
+
+### 6. Quick Tests in Blender Console
 
 For quick testing during development:
 
@@ -73,6 +110,22 @@ run_quick_tests()                    # Basic functionality
 run_full_tests()                     # Complete test suite
 test_specific_component('exporters') # Test specific component
 ```
+
+## 🔍 Validator Improvements
+
+The MaterialX validator has been enhanced to ensure strict compliance with the MaterialX specification:
+
+### Specification Compliance
+- **Correct `standard_surface` usage**: Only accepts `<standard_surface>` as direct elements (not as nodes)
+- **Rejects invalid patterns**: Identifies and reports incorrect `standard_surface` node usage
+- **Reference file validation**: All 21 reference files in `MaterialX_Reference/StandardSurface/` pass validation
+- **Quality assurance**: Ensures exported MaterialX files follow the official specification
+
+### Validation Features
+- **Surface shader validation**: Ensures proper `standard_surface` element usage
+- **Material structure validation**: Validates correct material-shader connections
+- **Node connectivity validation**: Checks for proper node connections and values
+- **Export quality validation**: Provides comprehensive validation of MaterialX documents
 
 ## 📊 Test Coverage
 

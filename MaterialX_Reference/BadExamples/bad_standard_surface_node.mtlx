@@ -1,0 +1,13 @@
+<?xml version="1.0"?>
+<materialx version="1.39" colorspace="lin_rec709">
+  <!-- BAD: standard_surface should not be a node -->
+  <node name="invalid_surface" type="standard_surface">
+    <input name="base" type="float" value="1.0" />
+    <input name="base_color" type="color3" value="0.8, 0.8, 0.8" />
+    <input name="specular_roughness" type="float" value="0.2" />
+  </node>
+  
+  <surfacematerial name="TestMaterial" type="material">
+    <input name="surfaceshader" type="surfaceshader" nodename="invalid_surface" />
+  </surfacematerial>
+</materialx>
