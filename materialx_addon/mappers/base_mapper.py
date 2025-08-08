@@ -49,7 +49,7 @@ class BaseNodeMapper(ABC):
     
     @abstractmethod
     def map_node(self, blender_node: bpy.types.Node, document: mx.Document, 
-                 exported_nodes: Dict[str, str]) -> mx.Node:
+                 exported_nodes: Dict[str, str]) -> Any:
         """
         Map a Blender node to a MaterialX node.
         
@@ -203,7 +203,7 @@ class BaseNodeMapper(ABC):
         return exported_nodes.get(from_node.name)
     
     def _create_materialx_node(self, document: mx.Document, node_name: str, 
-                              node_type: str, category: str) -> mx.Node:
+                              node_type: str, category: str) -> Any:
         """
         Create a MaterialX node in the document.
         
@@ -226,8 +226,8 @@ class BaseNodeMapper(ABC):
         except Exception as e:
             raise NodeMappingError(node_type, node_name, "node_creation", e)
     
-    def _add_input(self, materialx_node: mx.Node, input_name: str, input_type: str,
-                   value: Optional[Any] = None) -> mx.Input:
+    def _add_input(self, materialx_node: Any, input_name: str, input_type: str,
+                   value: Optional[Any] = None) -> Any:
         """
         Add an input to a MaterialX node.
         
@@ -257,8 +257,8 @@ class BaseNodeMapper(ABC):
         except Exception as e:
             raise NodeMappingError(materialx_node.getType(), materialx_node.getName(), "input_creation", e)
     
-    def _add_output(self, materialx_node: mx.Node, output_name: str, 
-                    output_type: str) -> mx.Output:
+    def _add_output(self, materialx_node: Any, output_name: str, 
+                    output_type: str) -> Any:
         """
         Add an output to a MaterialX node.
         
@@ -280,8 +280,8 @@ class BaseNodeMapper(ABC):
         except Exception as e:
             raise NodeMappingError(materialx_node.getType(), materialx_node.getName(), "output_creation", e)
     
-    def _connect_nodes(self, from_node: mx.Node, from_output: str,
-                      to_node: mx.Node, to_input: str) -> bool:
+    def _connect_nodes(self, from_node: Any, from_output: str,
+                      to_node: Any, to_input: str) -> bool:
         """
         Connect two MaterialX nodes.
         

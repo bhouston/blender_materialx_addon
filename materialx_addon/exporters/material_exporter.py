@@ -161,7 +161,7 @@ class MaterialExporter(BaseExporter):
             self.logger.error(f"Failed to connect nodes: {e}")
             return False
     
-    def _connect_material_to_shader(self, materialx_material: mx.Material, document: mx.Document) -> bool:
+    def _connect_material_to_shader(self, materialx_material, document: mx.Document) -> bool:
         """Connect the MaterialX material to its shader."""
         try:
             # Find the main shader node (usually Principled BSDF)

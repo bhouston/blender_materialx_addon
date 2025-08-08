@@ -11,7 +11,6 @@ import bpy
 import MaterialX as mx
 from ..utils.logging_utils import MaterialXLogger
 from ..utils.exceptions import MaterialXExportError
-from ..utils.performance import monitor_performance
 from ..core.document_manager import DocumentManager
 
 

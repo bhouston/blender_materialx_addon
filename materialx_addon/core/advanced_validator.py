@@ -258,36 +258,36 @@ class AdvancedValidator:
             results['errors'].append(f"Statistics generation failed: {e}")
     
     # Validation rule implementations
-    def _check_material_has_surface_shader(self, material: mx.Material, results: Dict[str, Any]):
+    def _check_material_has_surface_shader(self, material, results: Dict[str, Any]):
         """Check if material has a surface shader."""
         shader_refs = material.getShaderRefs()
         if not shader_refs:
             results['warnings'].append(f"Material '{material.getName()}' has no surface shader")
     
-    def _check_material_name_validity(self, material: mx.Material, results: Dict[str, Any]):
+    def _check_material_name_validity(self, material, results: Dict[str, Any]):
         """Check if material name is valid."""
         name = material.getName()
         if not name or name.strip() == "":
             results['errors'].append("Material has empty or invalid name")
     
-    def _check_material_references(self, material: mx.Material, results: Dict[str, Any]):
+    def _check_material_references(self, material, results: Dict[str, Any]):
         """Check material references."""
         # This could be extended to check for valid shader references
         pass
     
-    def _check_node_name_validity(self, node: mx.Node, results: Dict[str, Any]):
+    def _check_node_name_validity(self, node, results: Dict[str, Any]):
         """Check if node name is valid."""
         name = node.getName()
         if not name or name.strip() == "":
             results['errors'].append("Node has empty or invalid name")
     
-    def _check_node_type_validity(self, node: mx.Node, results: Dict[str, Any]):
+    def _check_node_type_validity(self, node, results: Dict[str, Any]):
         """Check if node type is valid."""
         node_type = node.getType()
         if not node_type or node_type.strip() == "":
             results['errors'].append(f"Node '{node.getName()}' has empty or invalid type")
     
-    def _check_node_inputs_outputs(self, node: mx.Node, results: Dict[str, Any]):
+    def _check_node_inputs_outputs(self, node, results: Dict[str, Any]):
         """Check node inputs and outputs."""
         inputs = node.getInputs()
         outputs = node.getOutputs()

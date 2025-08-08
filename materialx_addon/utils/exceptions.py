@@ -186,6 +186,31 @@ class MaterialXLibraryError(MaterialXExportError):
         super().__init__(message, details)
 
 
+class TypeConversionError(MaterialXExportError):
+    """
+    Raised when type conversion operations fail.
+    
+    This exception is raised when there are issues with converting
+    between Blender types and MaterialX types.
+    """
+    
+    def __init__(self, source_type: str, target_type: str, value: Any, 
+                 reason: Optional[str] = None, original_error: Optional[Exception] = None):
+        message = f"Type conversion failed: {source_type} -> {target_type}"
+        if reason:
+            message += f" - {reason}"
+        
+        details = {
+            'source_type': source_type,
+            'target_type': target_type,
+            'value': str(value),
+            'reason': reason,
+            'original_error': str(original_error) if original_error else None
+        }
+        
+        super().__init__(message, details)
+
+
 # Convenience function for creating error messages
 def create_error_message(error_type: str, **kwargs) -> str:
     """

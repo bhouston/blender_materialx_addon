@@ -33,7 +33,7 @@ class UtilityMapper(BaseNodeMapper):
         return blender_node.type in self.supported_node_types
     
     def map_node(self, blender_node: bpy.types.Node, document: mx.Document,
-                 exported_nodes: Dict[str, str]) -> mx.Node:
+                 exported_nodes: Dict[str, str]) -> Any:
         """Map a Blender utility node to a MaterialX node."""
         
         # Get node mapping configuration
@@ -78,7 +78,7 @@ class UtilityMapper(BaseNodeMapper):
         
         return materialx_node
     
-    def _map_rgb_node(self, blender_node: bpy.types.Node, materialx_node: mx.Node):
+    def _map_rgb_node(self, blender_node: bpy.types.Node, materialx_node: Any):
         """Map a Blender RGB node to MaterialX."""
         # RGB nodes are typically constants
         color_value = self._get_input_value(blender_node, 'Color')
@@ -88,7 +88,7 @@ class UtilityMapper(BaseNodeMapper):
             # Set the value directly on the node
             materialx_node.setInputValue('value', color_value)
     
-    def _map_value_node(self, blender_node: bpy.types.Node, materialx_node: mx.Node):
+    def _map_value_node(self, blender_node: bpy.types.Node, materialx_node: Any):
         """Map a Blender Value node to MaterialX."""
         # Value nodes are typically constants
         value = self._get_input_value(blender_node, 'Value')
@@ -98,7 +98,7 @@ class UtilityMapper(BaseNodeMapper):
             # Set the value directly on the node
             materialx_node.setInputValue('value', value)
     
-    def _map_tex_coord_node(self, blender_node: bpy.types.Node, materialx_node: mx.Node):
+    def _map_tex_coord_node(self, blender_node: bpy.types.Node, materialx_node: Any):
         """Map a Blender Texture Coordinate node to MaterialX."""
         # Texture coordinate nodes provide various coordinate spaces
         # Add outputs for different coordinate types

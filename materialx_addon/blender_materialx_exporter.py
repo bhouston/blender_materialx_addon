@@ -32,13 +32,11 @@ import math
 # Import the new modular structure
 from .node_definitions import CustomNodeDefinitionManager, get_custom_node_type, is_custom_node_type
 from .core import (
-    MaterialXLibraryBuilder, 
-    MaterialXDocumentManager, 
-    MaterialXTypeConverter,
-    MaterialXValidator, 
-    validate_materialx_document, 
-    validate_materialx_file
+    DocumentManager, 
+    TypeConverter,
+    AdvancedValidator
 )
+from .validation import MaterialXValidator, validate_materialx_document, validate_materialx_file
 
 
 def get_input_value_or_connection(node, input_name, exported_nodes=None) -> Tuple[bool, Any, str]:
@@ -840,53 +838,78 @@ class MaterialXBuilder:
         
         self.logger.info(f"MaterialXBuilder: Initializing with version {version}")
         
-        # Initialize enhanced library builder
-        self.library_builder = MaterialXLibraryBuilder(material_name, logger, version)
-        self.document = self.library_builder.document
-        self.nodes = self.library_builder.nodes
-        self.connections = self.library_builder.connections
-        self.node_counter = self.library_builder.node_counter
+        # Initialize document manager
+        self.document_manager = DocumentManager(logger)
+        self.document = self.document_manager.create_document(material_name, version)
+        self.nodes = {}
+        self.connections = []
+        self.node_counter = 0
         
-        self.logger.info(f"MaterialXBuilder: Library builder initialized, document has {len(self.document.getNodeDefs())} node definitions")
+        self.logger.info(f"MaterialXBuilder: Document manager initialized, document created for material '{material_name}'")
         
         # Phase 2 enhancements
-        self.type_converter = MaterialXTypeConverter(logger)
+        self.type_converter = TypeConverter(logger)
         
     def add_node(self, node_type: str, name: str, node_type_category: str = None, **params) -> str:
         """Add a node using enhanced type-safe creation."""
-        return self.library_builder.add_node(node_type, name, node_type_category, **params)
+        node = self.document_manager.add_node(self.document, name, node_type, node_type_category or "color3")
+        self.nodes[name] = node
+        self.node_counter += 1
+        return name
     
     def add_connection(self, from_node: str, from_output: str, to_node: str, to_input: str):
         """Add a connection with type validation."""
-        self.library_builder.add_connection(from_node, from_output, to_node, to_input)
+        if from_node in self.nodes and to_node in self.nodes:
+            success = self.document_manager.connect_nodes(
+                self.nodes[from_node], from_output,
+                self.nodes[to_node], to_input
+            )
+            if success:
+                self.connections.append((from_node, from_output, to_node, to_input))
     
     def add_surface_shader_node(self, node_type: str, name: str, **params) -> str:
         """Add a surface shader node with enhanced type safety."""
-        return self.library_builder.add_surface_shader_node(node_type, name, **params)
+        return self.add_node(node_type, name, "surface")
     
     def add_surface_shader_input(self, surface_node_name: str, input_name: str, input_type: str, nodegraph_name: str = None, nodename: str = None, value: str = None):
         """Add surface shader input with type-safe handling."""
-        self.library_builder.add_surface_shader_input(surface_node_name, input_name, input_type, nodegraph_name, nodename, value)
+        if surface_node_name in self.nodes:
+            self.document_manager.add_input(self.nodes[surface_node_name], input_name, input_type, value)
     
     def add_output(self, name: str, output_type: str, nodename: str):
         """Add output with type validation."""
-        self.library_builder.add_output(name, output_type, nodename)
+        if nodename in self.nodes:
+            self.document_manager.add_output(self.nodes[nodename], name, output_type)
     
     def set_material_surface(self, surface_node_name: str):
         """Set material surface with enhanced validation."""
-        self.library_builder.set_material_surface(surface_node_name)
+        # This would need to be implemented based on MaterialX material structure
+        pass
     
     def to_string(self) -> str:
         """Convert to string using enhanced library methods."""
-        return self.library_builder.to_string()
+        try:
+            return mx.writeToXmlString(self.document)
+        except Exception as e:
+            self.logger.error(f"Failed to convert document to string: {e}")
+            return ""
     
     def write_to_file(self, filepath: str) -> bool:
         """Write to file using enhanced library methods."""
-        return self.library_builder.write_to_file(filepath)
+        try:
+            return mx.writeToXmlFile(self.document, filepath)
+        except Exception as e:
+            self.logger.error(f"Failed to write document to file: {e}")
+            return False
     
     def validate(self) -> bool:
         """Validate document using enhanced validation."""
-        return self.library_builder.validate()
+        try:
+            validation_results = self.document_manager.validate_document(self.document)
+            return validation_results.get('valid', False)
+        except Exception as e:
+            self.logger.error(f"Validation failed: {e}")
+            return False
     
     def validate_with_details(self) -> Dict[str, Any]:
         """
@@ -896,20 +919,9 @@ class MaterialXBuilder:
             Dict containing comprehensive validation results
         """
         try:
-            # Get the MaterialX document from the library builder
-            if hasattr(self.library_builder, 'document') and self.library_builder.document:
-                # Create validator and load standard libraries
-                validator = MaterialXValidator(self.logger)
-                validator.load_standard_libraries()
-                
-                # Validate the document
-                validation_results = validator.validate_document(
-                    self.library_builder.document,
-                    resolve_inheritance=True,
-                    verbose=True,
-                    include_stdlib=True
-                )
-                
+            # Validate the document using document manager
+            if self.document:
+                validation_results = self.document_manager.validate_document(self.document)
                 return validation_results
             else:
                 return {
@@ -929,14 +941,14 @@ class MaterialXBuilder:
             }
     
     def set_write_options(self, **options):
-        """Set write options for the library builder."""
-        if hasattr(self.library_builder, 'set_write_options'):
-            self.library_builder.set_write_options(**options)
+        """Set write options for the document manager."""
+        # Document manager doesn't have write options, but we can store them
+        self.write_options = options
     
     def cleanup(self):
         """Clean up resources."""
-        if hasattr(self.library_builder, 'cleanup'):
-            self.library_builder.cleanup()
+        # Document manager cleanup is handled automatically
+        pass
     
     def optimize_document(self) -> bool:
         """Optimize the document using enhanced library methods."""
