@@ -126,6 +126,14 @@ class NodeMapperRegistry:
             UnsupportedNodeError: If no mapper is found for the node
             NodeMappingError: If mapping fails
         """
+        # Check if node already exists in exported_nodes
+        if blender_node.name in exported_nodes:
+            existing_node_name = exported_nodes[blender_node.name]
+            existing_node = document.getNode(existing_node_name)
+            if existing_node:
+                self.logger.debug(f"Node {blender_node.name} already mapped to {existing_node_name}")
+                return existing_node
+        
         mapper = self.get_mapper_for_node(blender_node)
         if not mapper:
             raise UnsupportedNodeError(blender_node.type, blender_node.name)

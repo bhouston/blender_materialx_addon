@@ -220,11 +220,42 @@ class BaseNodeMapper(ABC):
             NodeMappingError: If node creation fails
         """
         try:
-            node = document.addNode(node_name, node_type, category)
-            self.logger.debug(f"Created MaterialX node: {node_name} ({node_type})")
+            # Ensure unique node name
+            unique_name = self._get_unique_node_name(document, node_name, node_type)
+            
+            node = document.addNode(unique_name, node_type, category)
+            self.logger.debug(f"Created MaterialX node: {unique_name} ({node_type})")
             return node
         except Exception as e:
             raise NodeMappingError(node_type, node_name, "node_creation", e)
+    
+    def _get_unique_node_name(self, document: mx.Document, base_name: str, node_type: str) -> str:
+        """
+        Get a unique node name for the document.
+        
+        Args:
+            document: The MaterialX document
+            base_name: Base name for the node
+            node_type: Type of the node
+            
+        Returns:
+            Unique node name
+        """
+        # Start with the base name
+        name = base_name
+        counter = 1
+        
+        # Check if name exists and generate unique name
+        while document.getNode(name):
+            name = f"{base_name}_{counter}"
+            counter += 1
+            
+            # Prevent infinite loop
+            if counter > 1000:
+                name = f"{node_type}_{counter}"
+                break
+        
+        return name
     
     def _add_input(self, materialx_node: Any, input_name: str, input_type: str,
                    value: Optional[Any] = None) -> Any:
@@ -244,6 +275,12 @@ class BaseNodeMapper(ABC):
             NodeMappingError: If input creation fails
         """
         try:
+            # Check if input already exists
+            existing_input = materialx_node.getInput(input_name)
+            if existing_input:
+                self.logger.debug(f"Input {input_name} already exists on {materialx_node.getName()}")
+                return existing_input
+            
             input_port = materialx_node.addInput(input_name, input_type)
             
             if value is not None:
@@ -274,6 +311,12 @@ class BaseNodeMapper(ABC):
             NodeMappingError: If output creation fails
         """
         try:
+            # Check if output already exists
+            existing_output = materialx_node.getOutput(output_name)
+            if existing_output:
+                self.logger.debug(f"Output {output_name} already exists on {materialx_node.getName()}")
+                return existing_output
+            
             output_port = materialx_node.addOutput(output_name, output_type)
             self.logger.debug(f"Added output to {materialx_node.getName()}: {output_name} ({output_type})")
             return output_port

@@ -62,8 +62,8 @@ class BatchExporter(BaseExporter):
             self.logger.error(f"Batch export failed: {e}")
             return False
     
-    def export_all_materials(self, export_directory: str, 
-                           options: Optional[Dict[str, Any]] = None) -> Dict[str, str]:
+    def export_all_materials(self, scene: bpy.types.Scene, export_directory: str, 
+                           options: Optional[Dict[str, Any]] = None) -> Dict[str, bool]:
         """
         Export all materials in the current Blender scene.
         
@@ -72,7 +72,7 @@ class BatchExporter(BaseExporter):
             options: Optional export options
             
         Returns:
-            Dictionary mapping material names to export paths
+            Dictionary mapping material names to success status
         """
         exported_materials = {}
         
@@ -101,8 +101,10 @@ class BatchExporter(BaseExporter):
                 temp_object = self._create_temp_object(material)
                 if temp_object:
                     if self.material_exporter.export(temp_object, material_path, self.export_options):
-                        exported_materials[material.name] = material_path
+                        exported_materials[material.name] = True
                         self.exported_materials[material.name] = material_path
+                    else:
+                        exported_materials[material.name] = False
                     
                     # Clean up temporary object
                     bpy.data.objects.remove(temp_object)

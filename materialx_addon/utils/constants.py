@@ -21,7 +21,14 @@ DEFAULT_EXPORT_OPTIONS = {
 }
 
 # Supported MaterialX versions
-SUPPORTED_MATERIALX_VERSIONS = ['1.39', '1.38', '1.37']
+SUPPORTED_MATERIALX_VERSIONS = [
+    ('1.39', '1.39', 'MaterialX 1.39'),
+    ('1.38', '1.38', 'MaterialX 1.38'),
+    ('1.37', '1.37', 'MaterialX 1.37')
+]
+
+# Default MaterialX version
+DEFAULT_MATERIALX_VERSION = '1.39'
 
 # File extensions
 MATERIALX_EXTENSION = '.mtlx'

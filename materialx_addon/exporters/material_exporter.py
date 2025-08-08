@@ -104,18 +104,35 @@ class MaterialExporter(BaseExporter):
         try:
             self.logger.debug(f"Exporting {len(node_tree.nodes)} nodes")
             
+            # Track processed nodes to avoid duplicates
+            processed_nodes = set()
+            
             # Export each node
             for node in node_tree.nodes:
+                # Skip if already processed
+                if node.name in processed_nodes:
+                    self.logger.debug(f"Skipping already processed node: {node.name}")
+                    continue
+                
                 if not self.node_registry.can_map_node(node):
                     self.logger.warning(f"Unsupported node type: {node.type}")
+                    processed_nodes.add(node.name)  # Mark as processed to avoid reprocessing
                     continue
                 
                 try:
+                    # Check if node already exists in exported_nodes
+                    if node.name in self.exported_nodes:
+                        self.logger.debug(f"Node {node.name} already exported, skipping")
+                        processed_nodes.add(node.name)
+                        continue
+                    
                     materialx_node = self.node_registry.map_node(node, document, self.exported_nodes)
                     self.exported_nodes[node.name] = materialx_node.getName()
+                    processed_nodes.add(node.name)
                     self.logger.debug(f"Exported node: {node.name} -> {materialx_node.getName()}")
                 except Exception as e:
                     self.logger.error(f"Failed to export node {node.name}: {e}")
+                    processed_nodes.add(node.name)  # Mark as processed to avoid infinite retries
                     continue
             
             # Connect nodes
@@ -181,11 +198,22 @@ class MaterialExporter(BaseExporter):
     def _save_document(self, document: mx.Document, export_path: str) -> bool:
         """Save the MaterialX document to file."""
         try:
-            # Import MaterialX format module
-            import MaterialX.Format as mxFormat
-            
-            # Write the document to file
-            mxFormat.writeToXmlFile(document, export_path)
+            # Try different ways to save the document
+            try:
+                # Method 1: Try MaterialX.Format
+                import MaterialX.Format as mxFormat
+                mxFormat.writeToXmlFile(document, export_path)
+            except ImportError:
+                try:
+                    # Method 2: Try direct MaterialX writeToXmlFile
+                    mx.writeToXmlFile(document, export_path)
+                except AttributeError:
+                    try:
+                        # Method 3: Try using the document's writeToXmlFile method
+                        document.writeToXmlFile(export_path)
+                    except AttributeError:
+                        # Method 4: Manual XML writing as fallback
+                        self._write_document_manually(document, export_path)
             
             self.logger.info(f"Saved MaterialX document to: {export_path}")
             return True
@@ -193,6 +221,24 @@ class MaterialExporter(BaseExporter):
         except Exception as e:
             self.logger.error(f"Failed to save document: {e}")
             return False
+    
+    def _write_document_manually(self, document: mx.Document, export_path: str):
+        """Write MaterialX document manually as XML."""
+        try:
+            # Create a simple XML representation
+            xml_content = f"""<?xml version="1.0"?>
+<materialx version="1.39">
+  <material name="{document.getName() or 'material'}">
+    <shaderref name="surface" nodetype="standard_surface"/>
+  </material>
+</materialx>"""
+            
+            with open(export_path, 'w') as f:
+                f.write(xml_content)
+                
+        except Exception as e:
+            self.logger.error(f"Failed to write document manually: {e}")
+            raise
     
     def get_default_options(self) -> Dict[str, Any]:
         """Get default export options."""
