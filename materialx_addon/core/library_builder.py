@@ -102,19 +102,15 @@ class MaterialXLibraryBuilder:
             # Create standard node
             node = self.nodegraph.addNode(node_type, name)
             
-            # Set node definition if available
-            nodedef = self.document_manager.get_node_definition(node_type, node_type_category)
-            if nodedef:
-                node.setNodeDefString(nodedef.getName())
+            # For clean export, we don't set node definitions from libraries
+            # The node will work fine without explicit nodedef references
+            # Libraries are only used for validation, not in the export
             
             # Set parameters
             for param_name, param_value in params.items():
                 if param_value is not None:
-                    input_elem = node.addInput(param_name, "float")  # Default type
-                    if isinstance(param_value, (list, tuple)):
-                        input_elem.setValueString(",".join(str(v) for v in param_value))
-                    else:
-                        input_elem.setValueString(str(param_value))
+                    # Use the node builder to create inputs with proper type handling
+                    self.node_builder.create_mtlx_input(node, param_name, param_value, node_type, node_type_category)
             
             self.nodes[name] = node
             self.node_counter += 1

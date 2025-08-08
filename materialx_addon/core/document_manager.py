@@ -305,7 +305,7 @@ class MaterialXDocumentManager:
     
     def validate_document(self) -> bool:
         """
-        Validate the current document.
+        Validate the current document using libraries for validation only.
         
         Returns:
             bool: True if document is valid
@@ -315,22 +315,32 @@ class MaterialXDocumentManager:
             return False
         
         try:
-            # Basic validation
-            valid, message = self.document.validate()
-            if not valid:
-                self.logger.error(f"Document validation failed: {message}")
+            # Use the MaterialXValidator with libraries for validation only
+            from ..validation.validator import MaterialXValidator
+            
+            validator = MaterialXValidator(self.logger)
+            
+            # Load libraries for validation only (not attached to document)
+            if not validator.load_standard_libraries():
+                self.logger.warning("Could not load standard libraries for validation")
+                # Continue with basic validation only
+                valid, message = self.document.validate()
+                if not valid:
+                    self.logger.error(f"Document validation failed: {message}")
+                    return False
+                self.logger.info("Document validation passed (basic only)")
+                return True
+            
+            # Validate the document with libraries for reference
+            results = validator.validate_document(self.document, include_stdlib=True)
+            
+            if results['valid']:
+                self.logger.info("Document validation passed")
+                return True
+            else:
+                self.logger.error(f"Document validation failed: {results['errors']}")
                 return False
-            
-            # Advanced validation
-            validation_results = self.advanced_validator.validate_document_comprehensive(self.document)
-            if not validation_results.get('valid', False):
-                self.logger.error("Advanced validation failed")
-                self.logger.error(self.advanced_validator.get_validation_summary(validation_results))
-                return False
-            
-            self.logger.info("Document validation passed")
-            return True
-            
+                
         except Exception as e:
             self.logger.error(f"Error during document validation: {str(e)}")
             return False
