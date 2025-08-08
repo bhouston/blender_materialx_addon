@@ -367,10 +367,18 @@ class MaterialExporter(BaseExporter):
                 for warning in validation_results.get('warnings', []):
                     self.logger.warning(f"Validation warning: {warning}")
                 
-                # Log quality score if available
-                quality_score = validation_results.get('statistics', {}).get('quality_score', None)
-                if quality_score is not None:
-                    self.logger.info(f"Export quality score: {quality_score}/100")
+                # Log error and warning counts
+                total_errors = validation_results.get('statistics', {}).get('total_errors', 0)
+                total_warnings = validation_results.get('statistics', {}).get('total_warnings', 0)
+                
+                if total_errors > 0 or total_warnings > 0:
+                    self.logger.info(f"📊 Validation summary: {total_errors} errors, {total_warnings} warnings")
+                else:
+                    self.logger.info("✅ No validation issues found")
+                
+                # Log recommendations if any
+                for recommendation in validation_results.get('recommendations', []):
+                    self.logger.info(f"💡 Recommendation: {recommendation}")
                 
                 return validation_results
             else:
