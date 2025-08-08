@@ -1,24 +1,19 @@
 #!/usr/bin/env python3
 """
-MaterialX Core Package
+MaterialX Addon Core Package
 
-This package contains the core MaterialX library functionality.
+This package contains the core components for the MaterialX addon,
+including document management, library building, and type conversion.
 """
 
-from .document_manager import MaterialXDocumentManager
-from .library_builder import MaterialXLibraryBuilder
-from .type_converter import MaterialXTypeConverter
-from .advanced_validator import MaterialXAdvancedValidator
-
-# Import validation functions for backward compatibility
-from ..validation.validator import MaterialXValidator, validate_materialx_document, validate_materialx_file
+from .document_manager import DocumentManager
+from .library_builder import LibraryBuilder
+from .type_converter import TypeConverter
+from .advanced_validator import AdvancedValidator
 
 __all__ = [
-    'MaterialXDocumentManager',
-    'MaterialXLibraryBuilder', 
-    'MaterialXTypeConverter',
-    'MaterialXAdvancedValidator',
-    'MaterialXValidator',
-    'validate_materialx_document',
-    'validate_materialx_file'
+    'DocumentManager',
+    'LibraryBuilder', 
+    'TypeConverter',
+    'AdvancedValidator'
 ]
