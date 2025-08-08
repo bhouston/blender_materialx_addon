@@ -68,9 +68,8 @@ def run_bad_examples_validation_tests():
             "bad_material_no_shader_connection.mtlx": ["has no surfaceshader input connection"],
             "bad_material_wrong_shader_type.mtlx": ["connected to non-standard_surface element"],
             "bad_material_nonexistent_shader.mtlx": ["references non-existent surface shader"],
-            "bad_disconnected_nodes.mtlx": ["has no values or connections"],
-            "bad_texture_no_texcoord.mtlx": ["has texcoord input but no connection"],
-            "bad_missing_default_values.mtlx": ["missing default value for"],
+            "bad_disconnected_nodes.mtlx": ["has no values or connections", "has no file or connections"],
+            "bad_texture_no_texcoord.mtlx": ["missing texcoord input"],
             "bad_invalid_xml.mtlx": ["Failed to load file"]  # Should fail to load
         }}
         

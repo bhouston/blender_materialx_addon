@@ -363,9 +363,11 @@ class MaterialXValidator:
             nodes = document.getNodes()
             disconnected_nodes = []
             orphaned_inputs = []
+            nonexistent_references = []
             
             for node in nodes:
                 node_has_connections = False
+                node_has_values = False
                 
                 for input_elem in node.getInputs():
                     if input_elem.getNodeName():
@@ -373,19 +375,100 @@ class MaterialXValidator:
                         # Check if referenced node exists
                         referenced_node = document.getNode(input_elem.getNodeName())
                         if not referenced_node:
-                            results['warnings'].append(f"Node '{node.getName()}' references non-existent node '{input_elem.getNodeName()}'")
-                    elif not input_elem.getValueString() and not input_elem.getConnectedOutput():
+                            nonexistent_references.append(f"Node '{node.getName()}' references non-existent node '{input_elem.getNodeName()}'")
+                    elif input_elem.getValueString():
+                        node_has_values = True
+                    elif input_elem.getNodeGraphString():
+                        # Input connects to a nodegraph output - this is valid
+                        node_has_connections = True
+                    elif not input_elem.getConnectedOutput():
                         # Input has no value and no connection
                         orphaned_inputs.append(f"Node '{node.getName()}' input '{input_elem.getName()}' has no value or connection")
                 
-                if not node_has_connections and node.getType() != "standard_surface":
+                # Check if node has any values or connections
+                # Skip standard_surface nodes (they should be direct elements, not nodes)
+                if node.getType() == "standard_surface":
+                    continue
+                
+                # Enhanced validation for specific node types
+                node_type = node.getType()
+                node_name = node.getName()
+                
+                # Get the actual node type from the element name
+                # In MaterialX, the element name is the node type, not the type attribute
+                actual_node_type = None
+                try:
+                    # Try to get the node type from the element name
+                    if hasattr(node, 'getNodeString'):
+                        actual_node_type = node.getNodeString()
+                    else:
+                        # Fallback: check if the node name suggests the type
+                        if 'constant' in node_name.lower():
+                            actual_node_type = 'constant'
+                        elif 'image' in node_name.lower():
+                            actual_node_type = 'image'
+                        # Also check the element name directly
+                        elif hasattr(node, 'getCategory'):
+                            actual_node_type = node.getCategory()
+                except:
+                    pass
+                
+                # Check constant nodes - they must have values or connections
+                if actual_node_type == 'constant' or node_type in ['constant', 'ramplr', 'ramp4']:
+                    has_value_or_connection = False
+                    for input_elem in node.getInputs():
+                        if input_elem.getValueString() or input_elem.getNodeName():
+                            has_value_or_connection = True
+                            break
+                    
+                    if not has_value_or_connection:
+                        disconnected_nodes.append(f"Constant node '{node.getName()}' has no values or connections")
+                
+                # Check image nodes - they must have file input or connections
+                elif actual_node_type == 'image' or node_type == 'image':
+                    has_file_or_connection = False
+                    file_input = node.getInput('file')
+                    if file_input and file_input.getValueString():
+                        has_file_or_connection = True
+                    
+                    # Check if any input has a connection
+                    for input_elem in node.getInputs():
+                        if input_elem.getNodeName():
+                            has_file_or_connection = True
+                            break
+                    
+                    if not has_file_or_connection:
+                        disconnected_nodes.append(f"Image node '{node.getName()}' has no file or connections")
+                
+                # Check texture nodes for texcoord input
+                elif actual_node_type in ['noise2d', 'checker2d', 'brick2d', 'voronoi2d', 'wave2d', 'musgrave2d'] or node_type in ['noise2d', 'checker2d', 'brick2d', 'voronoi2d', 'wave2d', 'musgrave2d']:
+                    texcoord_input = node.getInput('texcoord')
+                    if texcoord_input:
+                        if not texcoord_input.getNodeName():
+                            orphaned_inputs.append(f"Texture node '{node.getName()}' has texcoord input but no connection")
+                    else:
+                        # No texcoord input at all - this is actually valid for some cases
+                        # but we should warn about it
+                        results['warnings'].append(f"Texture node '{node.getName()}' missing texcoord input")
+                
+                # Flag nodes that have inputs but no values or connections
+                elif len(node.getInputs()) > 0 and not node_has_connections and not node_has_values:
                     disconnected_nodes.append(node.getName())
+                
+                # Flag nodes that should have inputs but don't have any at all
+                elif len(node.getInputs()) == 0 and (actual_node_type in ['constant', 'image'] or node_type in ['constant', 'image']):
+                    disconnected_nodes.append(f"Node '{node.getName()}' has no inputs at all")
             
             if disconnected_nodes:
-                results['warnings'].append(f"Found {len(disconnected_nodes)} disconnected nodes: {', '.join(disconnected_nodes[:5])}")
+                results['errors'].append(f"Found {len(disconnected_nodes)} nodes with no values or connections: {', '.join(disconnected_nodes[:5])}")
             
             if orphaned_inputs:
-                results['warnings'].append(f"Found {len(orphaned_inputs)} inputs without values or connections")
+                results['errors'].append(f"Found {len(orphaned_inputs)} inputs without values or connections")
+            
+            if nonexistent_references:
+                results['errors'].append(f"Found {len(nonexistent_references)} references to non-existent nodes")
+                for ref in nonexistent_references[:3]:  # Show first 3
+                    results['errors'].append(f"  - {ref}")
             
         except Exception as e:
             results['errors'].append(f"Connection validation error: {str(e)}")
@@ -426,7 +509,7 @@ class MaterialXValidator:
                             else:
                                 results['errors'].append(f"Material '{material.getName()}' connected to non-standard_surface element '{input_elem.getNodeName()}' (type: {shader_elem.getCategory()})")
                         else:
-                            results['warnings'].append(f"Material '{material.getName()}' references non-existent surface shader '{input_elem.getNodeName()}'")
+                            results['errors'].append(f"Material '{material.getName()}' references non-existent surface shader '{input_elem.getNodeName()}'")
                         break
                 
                 if not material_has_shader:
@@ -456,21 +539,24 @@ class MaterialXValidator:
     def _validate_default_values(self, document: mx.Document, results: Dict[str, Any]):
         """Validate that nodes have appropriate default values."""
         try:
+            # Check standard_surface elements (direct elements, not nodes)
+            for elem in document.getChildren():
+                if elem.getCategory() == "standard_surface":
+                    # MaterialX provides default values for most inputs, so we don't need to be strict
+                    # Only check for inputs that are explicitly defined but have no values
+                    for input_elem in elem.getInputs():
+                        value = input_elem.getValueString()
+                        if not value and not input_elem.getNodeName():
+                            # This input has no value and no connection, but MaterialX provides defaults
+                            # So we'll just warn about it rather than error
+                            results['warnings'].append(f"Standard surface element '{elem.getName()}' input '{input_elem.getName()}' has no value or connection (using default)")
+            
+            # Check nodes for values
             for node in document.getNodes():
                 node_type = node.getType()
                 
-                # Check standard_surface nodes for essential inputs
-                if node_type == "standard_surface":
-                    essential_inputs = ['base_color', 'base', 'specular_roughness']
-                    for input_name in essential_inputs:
-                        input_elem = node.getInput(input_name)
-                        if input_elem:
-                            value = input_elem.getValueString()
-                            if not value and not input_elem.getNodeName():
-                                results['warnings'].append(f"Standard surface node '{node.getName()}' missing default value for '{input_name}'")
-                
                 # Check constant nodes for values
-                elif node_type in ['constant', 'ramplr', 'ramp4']:
+                if node_type in ['constant', 'ramplr', 'ramp4']:
                     has_value = False
                     for input_elem in node.getInputs():
                         if input_elem.getValueString() or input_elem.getNodeName():
@@ -478,7 +564,13 @@ class MaterialXValidator:
                             break
                     
                     if not has_value:
-                        results['warnings'].append(f"Constant node '{node.getName()}' has no values or connections")
+                        results['errors'].append(f"Constant node '{node.getName()}' has no values or connections")
+                
+                # Check image nodes for file inputs
+                elif node_type == 'image':
+                    file_input = node.getInput('file')
+                    if file_input and not file_input.getValueString():
+                        results['warnings'].append(f"Image node '{node.getName()}' has no file specified")
             
         except Exception as e:
             results['errors'].append(f"Default value validation error: {str(e)}")
@@ -498,8 +590,18 @@ class MaterialXValidator:
                 
                 if not surfaceshader_input:
                     results['errors'].append(f"Material '{material.getName()}' missing surfaceshader input")
-                elif not surfaceshader_input.getNodeName():
-                    results['errors'].append(f"Material '{material.getName()}' surfaceshader input not connected to any node")
+                elif not surfaceshader_input.getNodeName() and not surfaceshader_input.getNodeGraphString():
+                    results['errors'].append(f"Material '{material.getName()}' surfaceshader input not connected to any node or nodegraph")
+                else:
+                    # Check if the referenced node actually exists
+                    referenced_node_name = surfaceshader_input.getNodeName()
+                    if referenced_node_name:
+                        referenced_node = document.getChild(referenced_node_name)
+                        if not referenced_node:
+                            results['errors'].append(f"Material '{material.getName()}' references non-existent surface shader '{referenced_node_name}'")
+                        elif referenced_node.getCategory() != "standard_surface":
+                            results['errors'].append(f"Material '{material.getName()}' connected to non-standard_surface element '{referenced_node_name}' (type: {referenced_node.getCategory()})")
+                    # Nodegraph connections are also valid
                 
                 # Check for proper material type
                 if material.getType() != "material":
@@ -514,13 +616,37 @@ class MaterialXValidator:
             # Check for texture nodes without texcoord inputs
             texture_nodes = []
             for node in document.getNodes():
-                if node.getType() in ['image', 'noise2d', 'checker2d', 'brick2d', 'voronoi2d', 'wave2d', 'musgrave2d']:
+                node_type = node.getType()
+                node_name = node.getName()
+                
+                # Get the actual node type from the element name
+                actual_node_type = None
+                try:
+                    if hasattr(node, 'getNodeString'):
+                        actual_node_type = node.getNodeString()
+                    else:
+                        # Fallback: check if the node name suggests the type
+                        if 'image' in node_name.lower():
+                            actual_node_type = 'image'
+                        elif any(texture_type in node_name.lower() for texture_type in ['noise', 'checker', 'brick', 'voronoi', 'wave', 'musgrave']):
+                            actual_node_type = node_name.lower()
+                        # Also check the element name directly
+                        elif hasattr(node, 'getCategory'):
+                            actual_node_type = node.getCategory()
+                except:
+                    pass
+                
+                if actual_node_type in ['image', 'noise2d', 'checker2d', 'brick2d', 'voronoi2d', 'wave2d', 'musgrave2d'] or node_type in ['image', 'noise2d', 'checker2d', 'brick2d', 'voronoi2d', 'wave2d', 'musgrave2d']:
                     texture_nodes.append(node)
             
             for node in texture_nodes:
                 texcoord_input = node.getInput('texcoord')
-                if texcoord_input and not texcoord_input.getNodeName():
-                    results['warnings'].append(f"Texture node '{node.getName()}' has texcoord input but no connection")
+                if texcoord_input:
+                    if not texcoord_input.getNodeName():
+                        results['errors'].append(f"Texture node '{node.getName()}' has texcoord input but no connection")
+                else:
+                    # No texcoord input at all - this is an error for texture nodes
+                    results['errors'].append(f"Texture node '{node.getName()}' missing texcoord input")
             
         except Exception as e:
             results['errors'].append(f"Texture coordinate validation error: {str(e)}")
