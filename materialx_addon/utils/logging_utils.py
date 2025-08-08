@@ -123,15 +123,7 @@ class MaterialXLogger:
             for error in errors:
                 self.error(f"Validation error: {error}")
     
-    def log_performance_metric(self, operation: str, duration: float, 
-                              threshold: Optional[float] = None):
-        """Log a performance metric."""
-        message = f"Performance: {operation} took {duration:.3f}s"
-        if threshold and duration > threshold:
-            message += f" (exceeded threshold of {threshold:.3f}s)"
-            self.warning(message)
-        else:
-            self.debug(message)
+
     
     def log_texture_export(self, texture_name: str, source_path: str, 
                           target_path: str, success: bool):
@@ -143,41 +135,7 @@ class MaterialXLogger:
                   target=target_path)
 
 
-class PerformanceLogger:
-    """
-    Specialized logger for performance monitoring.
-    
-    This class provides logging specifically for performance metrics
-    and timing information.
-    """
-    
-    def __init__(self, base_logger: MaterialXLogger):
-        """
-        Initialize the performance logger.
-        
-        Args:
-            base_logger: The base MaterialX logger to use
-        """
-        self.logger = base_logger
-    
-    def log_operation_start(self, operation: str):
-        """Log the start of an operation."""
-        self.logger.debug(f"Starting operation: {operation}")
-    
-    def log_operation_end(self, operation: str, duration: float, 
-                         success: bool = True):
-        """Log the end of an operation."""
-        status = "SUCCESS" if success else "FAILED"
-        self.logger.debug(f"Operation {status}: {operation} took {duration:.3f}s")
-    
-    def log_threshold_exceeded(self, operation: str, duration: float, 
-                              threshold: float):
-        """Log when a performance threshold is exceeded."""
-        exceeded_by = duration - threshold
-        self.logger.warning(
-            f"Performance threshold exceeded: {operation} took {duration:.3f}s "
-            f"(threshold: {threshold:.3f}s, exceeded by: {exceeded_by:.3f}s)"
-        )
+
 
 
 class ValidationLogger:

@@ -8,7 +8,7 @@ This module contains unit tests for the logging utilities.
 import logging
 from typing import List
 from .test_utils import BlenderTestCase
-from ..utils.logging_utils import MaterialXLogger, PerformanceLogger, ValidationLogger
+from ..utils.logging_utils import MaterialXLogger, ValidationLogger
 
 
 class TestMaterialXLogger(BlenderTestCase):
@@ -36,34 +36,12 @@ class TestMaterialXLogger(BlenderTestCase):
         self.logger.log_node_export("RGB", "TestNode", True)
         self.logger.log_unsupported_node("EMISSION", "EmissionNode", "Use Principled BSDF instead")
         self.logger.log_validation_result(True, [], [])
-        self.logger.log_performance_metric("test_operation", 0.5, 1.0)
+
         self.logger.log_texture_export("test.jpg", "/source/path", "/target/path", True)
         
         # Verify logger was created
         self.assertIsInstance(self.logger.logger, logging.Logger)
         self.assertEqual(self.logger.logger.name, "TestLogger")
-
-
-class TestPerformanceLogger(BlenderTestCase):
-    """Test PerformanceLogger functionality."""
-    
-    def setUp(self):
-        """Set up test environment."""
-        super().setUp()
-        self.base_logger = MaterialXLogger("TestPerformanceLogger")
-        self.perf_logger = PerformanceLogger(self.base_logger)
-    
-    def test(self):
-        """Test PerformanceLogger functionality."""
-        # Test operation logging
-        self.perf_logger.log_operation_start("test_operation")
-        self.perf_logger.log_operation_end("test_operation", 0.5, True)
-        
-        # Test threshold exceeded logging
-        self.perf_logger.log_threshold_exceeded("slow_operation", 10.0, 5.0)
-        
-        # Verify logger was created
-        self.assertIsInstance(self.perf_logger.logger, MaterialXLogger)
 
 
 class TestValidationLogger(BlenderTestCase):
@@ -186,7 +164,7 @@ def create_logging_tests() -> List[BlenderTestCase]:
     """
     return [
         TestMaterialXLogger("MaterialXLogger"),
-        TestPerformanceLogger("PerformanceLogger"),
+
         TestValidationLogger("ValidationLogger"),
         TestLoggerIntegration("LoggerIntegration"),
         TestLoggerLevels("LoggerLevels"),

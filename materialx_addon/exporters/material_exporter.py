@@ -263,7 +263,7 @@ class MaterialExporter(BaseExporter):
             'strict_mode': True,
             'optimize_document': True,
             'advanced_validation': True,
-            'performance_monitoring': True
+    
         }
     
     def get_option_types(self) -> Dict[str, type]:
@@ -276,5 +276,5 @@ class MaterialExporter(BaseExporter):
             'strict_mode': bool,
             'optimize_document': bool,
             'advanced_validation': bool,
-            'performance_monitoring': bool
+    
         }

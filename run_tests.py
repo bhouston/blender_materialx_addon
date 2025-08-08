@@ -119,7 +119,7 @@ def check_test_coverage():
         "materialx_addon/tests/test_utils.py",
         "materialx_addon/tests/test_node_utils.py",
         "materialx_addon/tests/test_logging.py",
-        "materialx_addon/tests/test_performance.py",
+    
         "materialx_addon/tests/test_exporters.py",
         "materialx_addon/tests/test_mappers.py",
         "materialx_addon/tests/test_core.py"

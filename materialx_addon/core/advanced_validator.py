@@ -67,8 +67,7 @@ class AdvancedValidator:
             # Type validation
             self._validate_types(document, results)
             
-            # Performance validation
-            self._validate_performance(document, results)
+            
             
             # Custom validation rules
             self._run_custom_validation(document, results, options)
@@ -206,22 +205,7 @@ class AdvancedValidator:
         except Exception as e:
             results['errors'].append(f"Type validation failed: {e}")
     
-    def _validate_performance(self, document: mx.Document, results: Dict[str, Any]):
-        """Validate performance-related aspects."""
-        try:
-            nodes = document.getNodes()
-            
-            # Check for excessive node count
-            if len(nodes) > 1000:
-                results['warnings'].append(f"Large number of nodes ({len(nodes)}) may impact performance")
-            
-            # Check for deep connection chains
-            max_depth = self._calculate_max_connection_depth(document)
-            if max_depth > 20:
-                results['warnings'].append(f"Deep connection chain detected (depth: {max_depth})")
-            
-        except Exception as e:
-            results['errors'].append(f"Performance validation failed: {e}")
+
     
     def _run_custom_validation(self, document: mx.Document, results: Dict[str, Any], options: Dict[str, Any]):
         """Run custom validation rules based on options."""

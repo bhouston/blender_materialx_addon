@@ -9,7 +9,7 @@ from .constants import *
 from .exceptions import *
 from .node_utils import NodeUtils
 from .logging_utils import MaterialXLogger
-from .performance import PerformanceMonitor
+
 
 __all__ = [
     'MATERIALX_VERSION',
@@ -19,5 +19,5 @@ __all__ = [
     'ValidationError',
     'NodeUtils',
     'MaterialXLogger',
-    'PerformanceMonitor'
+
 ]

@@ -10,7 +10,7 @@ from typing import Dict, Any, List
 
 # Test execution settings
 TEST_SETTINGS = {
-    'enable_performance_tests': True,
+
     'enable_integration_tests': True,
     'enable_stress_tests': False,
     'timeout_seconds': 300,
@@ -28,7 +28,7 @@ TEST_CATEGORIES = {
             'test_utils',
             'test_node_utils', 
             'test_logging',
-            'test_performance',
+        
             'test_exporters',
             'test_mappers',
             'test_core'
@@ -42,13 +42,7 @@ TEST_CATEGORIES = {
         ],
         'timeout': 120
     },
-    'performance_tests': {
-        'enabled': True,
-        'modules': [
-            'test_performance'
-        ],
-        'timeout': 180
-    }
+
 }
 
 # Test data and fixtures
@@ -66,14 +60,7 @@ TEST_DATA = {
     ]
 }
 
-# Performance thresholds
-PERFORMANCE_THRESHOLDS = {
-    'material_export_time': 5.0,      # seconds
-    'batch_export_time': 30.0,        # seconds per material
-    'document_creation_time': 1.0,    # seconds
-    'validation_time': 2.0,           # seconds
-    'memory_usage_mb': 512            # MB
-}
+
 
 # Test environment settings
 TEST_ENVIRONMENT = {
@@ -105,9 +92,7 @@ def get_test_modules(category: str) -> List[str]:
     """Get test modules for a category."""
     return TEST_CATEGORIES.get(category, {}).get('modules', [])
 
-def get_performance_threshold(metric: str) -> float:
-    """Get performance threshold for a metric."""
-    return PERFORMANCE_THRESHOLDS.get(metric, float('inf'))
+
 
 def should_save_artifacts() -> bool:
     """Check if test artifacts should be saved."""
@@ -197,7 +182,7 @@ def get_test_config_summary() -> Dict[str, Any]:
     return {
         'settings': TEST_SETTINGS,
         'categories': {k: v.get('enabled', False) for k, v in TEST_CATEGORIES.items()},
-        'performance_thresholds': PERFORMANCE_THRESHOLDS,
+
         'environment': TEST_ENVIRONMENT,
         'reporting': REPORTING_SETTINGS
     }

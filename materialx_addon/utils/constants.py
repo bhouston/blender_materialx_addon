@@ -16,7 +16,6 @@ DEFAULT_EXPORT_OPTIONS = {
     'strict_mode': True,
     'optimize_document': True,
     'advanced_validation': True,
-    'performance_monitoring': True,
     'materialx_version': MATERIALX_VERSION,
 }
 
@@ -58,12 +57,7 @@ LOG_LEVELS = {
     'CRITICAL': 50
 }
 
-# Performance thresholds (in seconds)
-PERFORMANCE_THRESHOLDS = {
-    'EXPORT_WARNING': 5.0,  # Warn if export takes longer than 5 seconds
-    'VALIDATION_WARNING': 2.0,  # Warn if validation takes longer than 2 seconds
-    'OPTIMIZATION_WARNING': 3.0,  # Warn if optimization takes longer than 3 seconds
-}
+
 
 # Error messages
 ERROR_MESSAGES = {
@@ -95,7 +89,6 @@ UI_LABELS = {
     'STRICT_MODE': 'Strict Mode',
     'OPTIMIZE_DOCUMENT': 'Optimize Document',
     'ADVANCED_VALIDATION': 'Advanced Validation',
-    'PERFORMANCE_MONITORING': 'Performance Monitoring',
 }
 
 # Addon information

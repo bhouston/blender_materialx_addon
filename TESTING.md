@@ -10,7 +10,7 @@ The MaterialX addon includes a comprehensive test suite with multiple levels of 
 
 1. **Unit Tests** - Test individual components in isolation
 2. **Integration Tests** - Test component interactions
-3. **Performance Tests** - Test performance characteristics
+
 4. **End-to-End Tests** - Test complete workflows
 
 ### Test Files Structure
@@ -22,7 +22,7 @@ materialx_addon/tests/
 ├── test_utils.py            # Test framework and utilities
 ├── test_node_utils.py       # Node utility tests
 ├── test_logging.py          # Logging system tests
-├── test_performance.py      # Performance monitoring tests
+
 ├── test_exporters.py        # Exporter component tests
 ├── test_mappers.py          # Mapper component tests
 └── test_core.py            # Core component tests
@@ -83,7 +83,7 @@ test_specific_component('exporters') # Test specific component
 - **BatchExporter**: Multiple material export
 - **TextureExporter**: Texture handling
 - **Integration**: Exporter interactions
-- **Performance**: Export performance characteristics
+
 
 ### Mapper Tests (`test_mappers.py`)
 
@@ -103,13 +103,13 @@ test_specific_component('exporters') # Test specific component
 - **LibraryBuilder**: Library creation and management
 - **MaterialXValidator**: MaterialX validation
 - **Integration**: Core component workflows
-- **Performance**: Core component performance
+
 
 ### Utility Tests
 
 - **NodeUtils**: Node manipulation utilities
 - **Logging**: Logging system functionality
-- **Performance**: Performance monitoring
+
 - **Configuration**: Settings and configuration
 
 ## ⚙️ Test Configuration
@@ -120,7 +120,7 @@ The test suite is configurable through `materialx_addon/tests/test_config.py`:
 
 ```python
 TEST_SETTINGS = {
-    'enable_performance_tests': True,
+    
     'enable_integration_tests': True,
     'enable_stress_tests': False,
     'timeout_seconds': 300,
@@ -131,17 +131,7 @@ TEST_SETTINGS = {
 }
 ```
 
-### Performance Thresholds
 
-```python
-PERFORMANCE_THRESHOLDS = {
-    'material_export_time': 5.0,      # seconds
-    'batch_export_time': 30.0,        # seconds per material
-    'document_creation_time': 1.0,    # seconds
-    'validation_time': 2.0,           # seconds
-    'memory_usage_mb': 512            # MB
-}
-```
 
 ## 🔧 Test Framework
 
@@ -190,7 +180,7 @@ Test results include:
 - **Success/Failure status**
 - **Execution duration**
 - **Error messages**
-- **Performance metrics**
+
 - **Detailed logs**
 
 ## 🐛 Debugging Tests
@@ -223,9 +213,7 @@ env_status = validate_test_environment()
 print(f"Environment ready: {env_status['environment_ready']}")
 ```
 
-## 📈 Performance Testing
 
-### Performance Metrics
 
 The test suite tracks:
 
@@ -235,20 +223,11 @@ The test suite tracks:
 - **Validation time**
 - **Batch processing time**
 
-### Performance Thresholds
 
-Tests will fail if performance exceeds configured thresholds:
 
-```python
-# Example performance test
-def test_export_performance(self):
-    start_time = time.time()
-    result = self.exporter.export_material(self.material, output_path)
-    duration = time.time() - start_time
-    
-    threshold = get_performance_threshold('material_export_time')
-    self.assertLess(duration, threshold)
-```
+
+
+
 
 ## 🧹 Test Cleanup
 
@@ -298,7 +277,7 @@ Tests can save artifacts for analysis:
 
 - **Exported MaterialX files**
 - **Test logs**
-- **Performance reports**
+
 - **Screenshots**
 
 ## 📝 Writing New Tests

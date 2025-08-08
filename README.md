@@ -41,7 +41,7 @@ python3 deploy.py
 - Access the MaterialX panel in `Properties > Material > MaterialX`
 - Export the selected material or all materials
 - Configure export settings in the Configuration panel
-- View real-time export status and performance metrics
+- View real-time export status
 
 ### Command-Line
 
@@ -93,7 +93,7 @@ The exporter returns comprehensive results including:
 
 - Export success status and error messages
 - List of unsupported nodes with helpful suggestions
-- Performance metrics and optimization suggestions
+
 - MaterialX validation results
 - File output path and optimization status
 
@@ -130,7 +130,7 @@ The test suite includes comprehensive coverage for:
 - **Exporters**: Base, Material, Batch, and Texture exporters
 - **Mappers**: Node mapping and conversion functionality
 - **Core Components**: Document management, validation, type conversion
-- **Utilities**: Node utilities, logging, performance monitoring
+- **Utilities**: Node utilities, logging
 - **Configuration**: Node mappings and settings
 - **Integration**: Blender and MaterialX library integration
 
@@ -141,7 +141,7 @@ materialx_addon/tests/
 ├── test_utils.py          # Test framework and utilities
 ├── test_node_utils.py     # Node utility tests
 ├── test_logging.py        # Logging system tests
-├── test_performance.py    # Performance monitoring tests
+
 ├── test_exporters.py      # Exporter component tests
 ├── test_mappers.py        # Mapper component tests
 └── test_core.py          # Core component tests

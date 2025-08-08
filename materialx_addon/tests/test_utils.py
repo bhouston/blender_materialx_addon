@@ -173,6 +173,11 @@ class BlenderTestCase:
         if not first < second:
             raise AssertionError(message)
     
+    def assertGreaterEqual(self, first: Any, second: Any, message: str = "First value is not greater than or equal to second"):
+        """Assert that first value is greater than or equal to second value."""
+        if not first >= second:
+            raise AssertionError(message)
+    
     def assertRaises(self, exception_type: type, callable_obj: Callable, *args, **kwargs):
         """Assert that a callable raises a specific exception."""
         try:
@@ -336,13 +341,7 @@ def run_all_tests() -> Dict[str, Any]:
         except ImportError as e:
             logger = MaterialXLogger("TestRunner")
             logger.warning(f"Could not import logging tests: {e}")
-        
-        try:
-            from .test_performance import create_performance_tests
-            runner.add_tests(create_performance_tests())
-        except ImportError as e:
-            logger = MaterialXLogger("TestRunner")
-            logger.warning(f"Could not import performance tests: {e}")
+
         
         try:
             from .test_exporters import create_exporter_tests

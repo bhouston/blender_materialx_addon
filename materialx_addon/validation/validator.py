@@ -90,7 +90,7 @@ class MaterialXValidator:
             # Additional validation checks
             self._validate_document_structure(document, results)
             self._validate_node_connections(document, results)
-            self._validate_performance_issues(document, results)
+    
             
         except Exception as e:
             self.logger.error(f"Validation error: {e}")
@@ -361,27 +361,7 @@ class MaterialXValidator:
         except Exception as e:
             results['errors'].append(f"Connection validation error: {str(e)}")
     
-    def _validate_performance_issues(self, document: mx.Document, results: Dict[str, Any]):
-        """Validate for performance issues."""
-        try:
-            # Check for deeply nested nodegraphs
-            nodegraphs = document.getNodeGraphs()
-            for nodegraph in nodegraphs:
-                depth = self._calculate_nesting_depth(nodegraph)
-                if depth > 10:
-                    results['warnings'].append(f"NodeGraph '{nodegraph.getName()}' has deep nesting (depth: {depth})")
-            
-        except Exception as e:
-            results['errors'].append(f"Performance validation error: {str(e)}")
-    
-    def _calculate_nesting_depth(self, element: mx.Element, current_depth: int = 0) -> int:
-        """Calculate nesting depth of an element."""
-        max_depth = current_depth
-        for child in element.getChildren():
-            if child.isA(mx.NodeGraph):
-                child_depth = self._calculate_nesting_depth(child, current_depth + 1)
-                max_depth = max(max_depth, child_depth)
-        return max_depth
+
     
     def get_validation_summary(self, results: Dict[str, Any]) -> str:
         """Get a summary of validation results."""

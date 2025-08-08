@@ -148,24 +148,7 @@ class NodeMappingError(MaterialXExportError):
         super().__init__(message, details)
 
 
-class PerformanceError(MaterialXExportError):
-    """
-    Raised when performance thresholds are exceeded.
-    
-    This exception is raised when operations take longer than expected
-    and performance monitoring is enabled.
-    """
-    
-    def __init__(self, operation: str, duration: float, threshold: float):
-        message = f"Performance threshold exceeded: {operation} took {duration:.2f}s (threshold: {threshold:.2f}s)"
-        details = {
-            'operation': operation,
-            'duration': duration,
-            'threshold': threshold,
-            'exceeded_by': duration - threshold
-        }
-        
-        super().__init__(message, details)
+
 
 
 class MaterialXLibraryError(MaterialXExportError):

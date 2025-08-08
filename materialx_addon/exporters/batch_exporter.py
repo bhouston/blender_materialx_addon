@@ -169,6 +169,6 @@ class BatchExporter(BaseExporter):
             'strict_mode': True,
             'optimize_document': True,
             'advanced_validation': True,
-            'performance_monitoring': True,
+    
             'batch_mode': True
         }

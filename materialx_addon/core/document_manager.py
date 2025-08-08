@@ -18,7 +18,7 @@ class DocumentManager:
     Manages MaterialX document operations including creation, modification, and optimization.
     
     This class provides a clean interface for MaterialX document operations,
-    with proper error handling and performance monitoring.
+    with proper error handling.
     """
     
     def __init__(self, logger: Optional[MaterialXLogger] = None):

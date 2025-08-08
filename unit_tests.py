@@ -78,13 +78,7 @@ def test_individual_components():
         logger = MaterialXLogger("TestLogger")
         logger.info("Test log message")
         print("✅ Logging utilities working")
-        
-        # Test performance monitoring
-        from materialx_addon.utils.performance import PerformanceMonitor
-        monitor = PerformanceMonitor()
-        monitor.start_timer("test")
-        monitor.end_timer("test")
-        print("✅ Performance monitoring working")
+
         
         # Test node mappings
         from materialx_addon.config.node_mappings import NODE_MAPPING, is_node_supported

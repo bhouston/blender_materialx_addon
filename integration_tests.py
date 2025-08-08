@@ -11,7 +11,7 @@ Features:
 - Tests UI functionality (export buttons, configuration)
 - Validates exported MaterialX files
 - Tests error conditions and edge cases (unsupported nodes)
-- Performance testing with complex materials
+
 - Comprehensive material type coverage
 """
 
@@ -653,7 +653,7 @@ ERROR CONDITION TESTS:
 EXPORTED FILES:
 - MaterialX files are preserved in: test_output_mtlx/
 - All exported files are automatically validated using MaterialX library validation
-- Validation includes document structure, node connections, and performance analysis
+- Validation includes document structure and node connections
 - Inspect these files to verify export quality and identify any issues
 
 {'='*80}

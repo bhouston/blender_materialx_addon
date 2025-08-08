@@ -109,7 +109,7 @@ class MATERIALX_OT_export(Operator):
                 'relative_paths': self.relative_paths,
                 'optimize_document': context.scene.materialx_optimize_document,
                 'advanced_validation': context.scene.materialx_advanced_validation,
-                'performance_monitoring': True,  # Always enabled
+
                 'strict_mode': context.scene.materialx_strict_mode
             }
             
@@ -121,11 +121,7 @@ class MATERIALX_OT_export(Operator):
                 # Success with detailed information
                 message = f"Successfully exported '{context.material.name}' to MaterialX"
                 
-                # Add performance info if available
-                if 'performance_stats' in result and result['performance_stats']:
-                    stats = result['performance_stats']
-                    if 'total_time' in stats:
-                        message += f" (took {stats['total_time']:.2f}s)"
+
                 
                 # Add validation info if available
                 if 'validation_results' in result and result['validation_results']:
@@ -256,7 +252,7 @@ class MATERIALX_OT_export_all(Operator):
             'materialx_version': MATERIALX_VERSION,
             'optimize_document': context.scene.materialx_optimize_document,
             'advanced_validation': context.scene.materialx_advanced_validation,
-            'performance_monitoring': True,  # Always enabled
+
             'strict_mode': context.scene.materialx_strict_mode
         }
 
@@ -362,11 +358,7 @@ class MATERIALX_PT_panel(Panel):
                         col = box.column(align=True)
                         col.label(text="✓ Export Successful", icon='CHECKMARK')
                         
-                        # Handle single material export results
-                        if 'performance_stats' in result:
-                            stats = result['performance_stats']
-                            if 'total_time' in stats:
-                                col.label(text=f"Time: {stats['total_time']:.2f}s")
+
                         
                         if 'validation_results' in result:
                             validation = result['validation_results']

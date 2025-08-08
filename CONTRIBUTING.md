@@ -125,13 +125,7 @@ Create a test material with your new node type and run the test suite.
 
 ## 🔍 Advanced Features
 
-### Performance Monitoring
 
-The addon includes real-time performance tracking:
-- Operation timing
-- Memory usage tracking
-- Performance optimization suggestions
-- Resource cleanup monitoring
 
 ### Document Optimization
 
@@ -147,7 +141,7 @@ Comprehensive validation system:
 - Document structure validation
 - Node definition validation
 - Connection validation with circular dependency detection
-- Performance validation (node count, nesting depth)
+
 - Custom validation rule support
 
 ### Type Safety
