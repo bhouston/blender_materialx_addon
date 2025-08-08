@@ -96,20 +96,28 @@ class UtilityMapper(BaseNodeMapper):
         # RGB nodes are typically constants
         color_value = self._get_input_value(blender_node, 'Color')
         if color_value:
-            # Add output with color value
+            # Add input with color value
+            self._add_input(materialx_node, 'value', 'color3', value=color_value)
+            # Add output
             self._add_output(materialx_node, 'out', 'color3')
-            # Set the value directly on the node
-            materialx_node.setInputValue('value', color_value)
+        else:
+            # Default white color
+            self._add_input(materialx_node, 'value', 'color3', value=(1.0, 1.0, 1.0))
+            self._add_output(materialx_node, 'out', 'color3')
     
     def _map_value_node(self, blender_node: bpy.types.Node, materialx_node: Any):
         """Map a Blender Value node to MaterialX."""
         # Value nodes are typically constants
         value = self._get_input_value(blender_node, 'Value')
         if value is not None:
+            # Add input with value
+            self._add_input(materialx_node, 'value', 'float', value=value)
             # Add output
             self._add_output(materialx_node, 'out', 'float')
-            # Set the value directly on the node
-            materialx_node.setInputValue('value', value)
+        else:
+            # Default value
+            self._add_input(materialx_node, 'value', 'float', value=0.0)
+            self._add_output(materialx_node, 'out', 'float')
     
     def _map_tex_coord_node(self, blender_node: bpy.types.Node, materialx_node: Any):
         """Map a Blender Texture Coordinate node to MaterialX."""

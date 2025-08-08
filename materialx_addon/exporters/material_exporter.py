@@ -50,6 +50,9 @@ class MaterialExporter(BaseExporter):
                 self.export_options.get('materialx_version', '1.39')
             )
             
+            # Add colorspace declaration
+            document.setColorSpace("lin_rec709")
+            
             # Export the material
             success = self._export_material(material, document)
             if not success:
@@ -72,23 +75,24 @@ class MaterialExporter(BaseExporter):
         try:
             self.logger.info(f"Exporting material: {material.name}")
             
-            # Create MaterialX material
-            materialx_material = self.document_manager.add_material(
-                document, material.name, "standard_surface"
-            )
-            
             # Get the material's node tree
             if not material.node_tree:
                 self.logger.warning(f"Material {material.name} has no node tree")
                 return False
             
-            # Export nodes
+            # Export nodes first
             success = self._export_nodes(material.node_tree, document)
             if not success:
                 return False
             
-            # Connect material to shader
-            success = self._connect_material_to_shader(materialx_material, document)
+            # Find the main surface shader node
+            surface_shader_node = self._find_surface_shader_node(document)
+            if not surface_shader_node:
+                self.logger.error("No surface shader node found")
+                return False
+            
+            # Create MaterialX material and connect to shader
+            success = self._create_and_connect_material(material.name, surface_shader_node, document)
             if not success:
                 return False
             
@@ -100,29 +104,27 @@ class MaterialExporter(BaseExporter):
             return False
     
     def _export_nodes(self, node_tree: bpy.types.NodeTree, document: mx.Document) -> bool:
-        """Export nodes from a Blender node tree."""
+        """Export nodes from a Blender node tree to MaterialX."""
         try:
             self.logger.debug(f"Exporting {len(node_tree.nodes)} nodes")
             
-            # Track processed nodes to avoid duplicates
+            # Track processed and unsupported nodes
             processed_nodes = set()
             unsupported_nodes = []
             
-            # Export each node
+            # First pass: export all nodes
             for node in node_tree.nodes:
-                # Skip if already processed
                 if node.name in processed_nodes:
-                    self.logger.debug(f"Skipping already processed node: {node.name}")
                     continue
                 
+                # Check if node is supported
                 if not self.node_registry.can_map_node(node):
                     unsupported_nodes.append({
                         'name': node.name,
                         'type': node.type,
                         'bl_idname': node.bl_idname
                     })
-                    self.logger.warning(f"Unsupported node type: {node.type} ({node.name})")
-                    processed_nodes.add(node.name)  # Mark as processed to avoid reprocessing
+                    processed_nodes.add(node.name)
                     continue
                 
                 try:
@@ -173,7 +175,7 @@ class MaterialExporter(BaseExporter):
                 if not materialx_node:
                     continue
                 
-                # Connect outputs
+                # Connect outputs to inputs
                 for output in node.outputs:
                     if output.is_linked:
                         for link in output.links:
@@ -181,9 +183,17 @@ class MaterialExporter(BaseExporter):
                             if to_node.name in self.exported_nodes:
                                 to_materialx_node = document.getNode(self.exported_nodes[to_node.name])
                                 if to_materialx_node:
+                                    # Get the MaterialX input and output names
+                                    from_output_name = self._get_materialx_output_name(output.name, node)
+                                    to_input_name = self._get_materialx_input_name(link.to_socket.name, to_node)
+                                    
                                     # Connect the nodes
-                                    # This is a simplified connection - actual implementation would be more complex
-                                    pass
+                                    success = self._connect_materialx_nodes(
+                                        materialx_node, from_output_name,
+                                        to_materialx_node, to_input_name
+                                    )
+                                    if success:
+                                        self.logger.debug(f"Connected {node.name}.{output.name} -> {to_node.name}.{link.to_socket.name}")
             
             return True
             
@@ -191,22 +201,80 @@ class MaterialExporter(BaseExporter):
             self.logger.error(f"Failed to connect nodes: {e}")
             return False
     
-    def _connect_material_to_shader(self, materialx_material, document: mx.Document) -> bool:
-        """Connect the MaterialX material to its shader."""
+    def _connect_materialx_nodes(self, from_node: Any, from_output: str,
+                                to_node: Any, to_input: str) -> bool:
+        """Connect two MaterialX nodes."""
         try:
-            # Find the main shader node (usually Principled BSDF)
-            for node_name, materialx_node_name in self.exported_nodes.items():
-                materialx_node = document.getNode(materialx_node_name)
-                if materialx_node and materialx_node.getType() == "standard_surface":
-                    # Connect material to shader
-                    # This is a simplified connection - actual implementation would be more complex
-                    break
+            # Get the output and input ports
+            output_port = from_node.getOutput(from_output)
+            input_port = to_node.getInput(to_input)
             
+            if not output_port:
+                self.logger.warning(f"Output '{from_output}' not found on node '{from_node.getName()}'")
+                return False
+            
+            if not input_port:
+                self.logger.warning(f"Input '{to_input}' not found on node '{to_node.getName()}'")
+                return False
+            
+            # Connect the input to the output
+            input_port.setConnectedOutput(output_port)
             return True
             
         except Exception as e:
-            self.logger.error(f"Failed to connect material to shader: {e}")
+            self.logger.error(f"Failed to connect MaterialX nodes: {e}")
             return False
+    
+    def _find_surface_shader_node(self, document: mx.Document) -> Optional[Any]:
+        """Find the main surface shader node in the document."""
+        try:
+            # Look for standard_surface nodes
+            for node_name, materialx_node_name in self.exported_nodes.items():
+                materialx_node = document.getNode(materialx_node_name)
+                if materialx_node and materialx_node.getType() == "standard_surface":
+                    return materialx_node
+            
+            return None
+            
+        except Exception as e:
+            self.logger.error(f"Failed to find surface shader node: {e}")
+            return None
+    
+    def _create_and_connect_material(self, material_name: str, surface_shader_node: Any, 
+                                   document: mx.Document) -> bool:
+        """Create a MaterialX material and connect it to the surface shader."""
+        try:
+            # Create the material
+            material = document.addMaterial(material_name)
+            
+            # Add the surfaceshader input and connect it to the surface shader node
+            shader_input = material.addInput("surfaceshader", "surfaceshader")
+            shader_input.setConnectedNode(surface_shader_node)
+            
+            self.logger.debug(f"Created material '{material_name}' and connected to shader '{surface_shader_node.getName()}'")
+            return True
+            
+        except Exception as e:
+            self.logger.error(f"Failed to create and connect material: {e}")
+            return False
+    
+    def _get_materialx_output_name(self, blender_output_name: str, blender_node: bpy.types.Node) -> str:
+        """Get the MaterialX output name for a Blender output."""
+        # Get the mapper for this node type
+        mapper = self.node_registry.get_mapper_for_node(blender_node)
+        if mapper:
+            output_mapping = mapper.get_output_mapping()
+            return output_mapping.get(blender_output_name, blender_output_name)
+        return blender_output_name
+    
+    def _get_materialx_input_name(self, blender_input_name: str, blender_node: bpy.types.Node) -> str:
+        """Get the MaterialX input name for a Blender input."""
+        # Get the mapper for this node type
+        mapper = self.node_registry.get_mapper_for_node(blender_node)
+        if mapper:
+            input_mapping = mapper.get_input_mapping()
+            return input_mapping.get(blender_input_name, blender_input_name)
+        return blender_input_name
     
     def _save_document(self, document: mx.Document, export_path: str) -> bool:
         """Save the MaterialX document to file."""
@@ -258,23 +326,17 @@ class MaterialExporter(BaseExporter):
         return {
             'materialx_version': '1.39',
             'export_textures': True,
-            'copy_textures': True,
+            'texture_path': '',
             'relative_paths': True,
-            'strict_mode': True,
-            'optimize_document': True,
-            'advanced_validation': True,
-    
+            'copy_textures': False
         }
     
     def get_option_types(self) -> Dict[str, type]:
-        """Get expected types for export options."""
+        """Get option types for validation."""
         return {
             'materialx_version': str,
             'export_textures': bool,
-            'copy_textures': bool,
+            'texture_path': str,
             'relative_paths': bool,
-            'strict_mode': bool,
-            'optimize_document': bool,
-            'advanced_validation': bool,
-    
+            'copy_textures': bool
         }
