@@ -1,245 +1,372 @@
 # MaterialX Addon Testing Guide
 
-This document provides comprehensive information about testing the MaterialX Export addon for Blender.
+This document provides comprehensive information about testing the MaterialX addon for Blender.
 
-## 🧪 Test Scripts Overview
+## 🧪 Test Suite Overview
 
-### Main Test Script: `run_tests.py`
+The MaterialX addon includes a comprehensive test suite with multiple levels of testing:
 
-This is the **only** test script you need to run. It consolidates all testing functionality:
+### Test Categories
 
-- **Addon Installation Test**: Verifies the MaterialX addon is properly installed and enabled
-- **UI Functionality Test**: Checks that operators and panels are registered correctly
-- **Error Condition Test**: Tests handling of unsupported nodes (Emission, Fresnel)
-- **Material Export Test**: Tests exporting real-world materials from `examples/blender/` files
-- **Material Validation Test**: Validates exported MaterialX files for proper structure
-- **Performance Test**: Tests export performance with complex materials
+1. **Unit Tests** - Test individual components in isolation
+2. **Integration Tests** - Test component interactions
+3. **Performance Tests** - Test performance characteristics
+4. **End-to-End Tests** - Test complete workflows
 
-### Test Material Creation: `create_test_materials.py`
+### Test Files Structure
 
-This script creates the test materials used by the main test script. Run this first to generate the test blend files:
-
-```bash
-blender --background --python create_test_materials.py
+```
+materialx_addon/tests/
+├── __init__.py              # Test package initialization
+├── test_config.py           # Test configuration and settings
+├── test_utils.py            # Test framework and utilities
+├── test_node_utils.py       # Node utility tests
+├── test_logging.py          # Logging system tests
+├── test_performance.py      # Performance monitoring tests
+├── test_exporters.py        # Exporter component tests
+├── test_mappers.py          # Mapper component tests
+└── test_core.py            # Core component tests
 ```
 
-## 🚀 Test Execution
+## 🚀 Running Tests
 
-### Prerequisites
+### 1. Complete Test Suite (Recommended)
 
-1. Install the MaterialX addon in Blender
-2. Create test materials: `blender --background --python create_test_materials.py`
-3. Ensure Blender is in your PATH or update the paths in the test script
-
-### Running Tests
+Run the full test suite with automatic deployment:
 
 ```bash
 python3 run_tests.py
 ```
 
-**Note**: The test script now preserves all exported MaterialX files in a `test_output_mtlx/` directory for inspection. This allows you to examine the actual output and identify any issues that might not be caught by the validation.
+This script:
+- Deploys the addon to Blender
+- Runs all unit tests
+- Runs integration tests
+- Provides comprehensive results
 
-## 📊 Test Results
+### 2. Unit Tests Only
 
-### Current Test Status (Latest Run)
+Run just the unit tests:
 
-**✅ Successfully Tested Materials (8/8):**
+```bash
+python3 unit_tests.py
+```
 
-- **SimplePrincipled**: Basic Principled BSDF material
-- **TextureBased**: Material with noise textures and color ramps
-- **ComplexProcedural**: Complex procedural material with multiple noise layers
-- **MetallicMaterial**: Metallic material with anisotropy
-- **MixedShader**: Material mixing different shaders
-- **MathHeavy**: Material with extensive math operations
-- **EmissionMaterial**: Emission shader material (handled gracefully)
-- **GlassMaterial**: Glass material with transparency (handled gracefully)
+### 3. Integration Tests
 
-### Test Coverage
+Run integration tests (requires addon to be installed):
 
-The test suite provides comprehensive coverage:
+```bash
+python3 integration_tests.py
+```
 
-- ✅ **Addon Installation**: Verifies proper installation and loading
-- ✅ **UI Functionality**: Tests all UI elements and operators
-- ✅ **Material Export**: Tests export of 8 real-world materials
-- ✅ **MaterialX Validation**: Validates exported files for proper structure
-- ✅ **Error Handling**: Tests graceful handling of unsupported nodes
-- ✅ **Performance**: Ensures export completes within reasonable time
-- ✅ **File Structure**: Validates MaterialX document structure and version
+### 4. Quick Tests in Blender Console
 
-## 📁 Test Materials
+For quick testing during development:
 
-The test suite uses these real-world materials from `examples/blender/`:
+```python
+# In Blender's Python console
+exec(open('/path/to/blender_test_runner.py').read())
 
-### Successfully Exported Materials
+# Or run specific functions
+run_quick_tests()                    # Basic functionality
+run_full_tests()                     # Complete test suite
+test_specific_component('exporters') # Test specific component
+```
 
-- **SimplePrincipled.blend**: Basic Principled BSDF material
-- **TextureBased.blend**: Material with noise textures and color ramps
-- **ComplexProcedural.blend**: Complex procedural material with multiple noise layers
-- **MetallicMaterial.blend**: Metallic material with anisotropy
-- **MixedShader.blend**: Material mixing different shaders
-- **MathHeavy.blend**: Material with extensive math operations
+## 📊 Test Coverage
 
-### Materials with Unsupported Nodes (Handled Gracefully)
+### Exporter Tests (`test_exporters.py`)
 
-- **EmissionMaterial.blend**: Emission shader material
-  - **Status**: Exported successfully with helpful error messages
-  - **Unsupported**: Pure Emission shader (needs Principled BSDF conversion)
-- **GlassMaterial.blend**: Glass material with transparency
-  - **Status**: Exported successfully with helpful error messages
-  - **Unsupported**: Fresnel node (needs Principled BSDF conversion)
+- **BaseExporter**: Core exporter functionality
+- **MaterialExporter**: Single material export
+- **BatchExporter**: Multiple material export
+- **TextureExporter**: Texture handling
+- **Integration**: Exporter interactions
+- **Performance**: Export performance characteristics
 
-## 🔍 Error Condition Testing
+### Mapper Tests (`test_mappers.py`)
 
-The test suite specifically tests error handling for unsupported nodes:
+- **BaseMapper**: Core mapping functionality
+- **NodeMapperRegistry**: Mapper registration and lookup
+- **PrincipledMapper**: Principled BSDF mapping
+- **TextureMapper**: Texture node mapping
+- **MathMapper**: Math operation mapping
+- **UtilityMapper**: Utility node mapping
+- **Integration**: Complex mapping scenarios
 
-### Unsupported Node Types
+### Core Tests (`test_core.py`)
 
-- **Emission Shader**: Should be identified as unsupported with helpful message
-- **Fresnel Node**: Should be identified as unsupported with helpful message
+- **DocumentManager**: MaterialX document handling
+- **AdvancedValidator**: Material validation
+- **TypeConverter**: Type conversion utilities
+- **LibraryBuilder**: Library creation and management
+- **MaterialXValidator**: MaterialX validation
+- **Integration**: Core component workflows
+- **Performance**: Core component performance
 
-### Error Message Validation
+### Utility Tests
 
-The tests verify that the exporter provides helpful error messages rather than crashing:
+- **NodeUtils**: Node manipulation utilities
+- **Logging**: Logging system functionality
+- **Performance**: Performance monitoring
+- **Configuration**: Settings and configuration
 
-**Expected Error Messages:**
+## ⚙️ Test Configuration
 
-- **Emission Shader**: "Replace with Principled BSDF and use 'Emission Color' and 'Emission Strength' inputs"
-- **Fresnel Node**: "Remove this node and use Principled BSDF's built-in fresnel effects via 'Specular IOR Level' and 'IOR' inputs"
+The test suite is configurable through `materialx_addon/tests/test_config.py`:
 
-## 📋 MaterialX File Validation
+### Test Settings
 
-The test suite validates exported MaterialX files for:
+```python
+TEST_SETTINGS = {
+    'enable_performance_tests': True,
+    'enable_integration_tests': True,
+    'enable_stress_tests': False,
+    'timeout_seconds': 300,
+    'max_test_duration': 30.0,
+    'enable_debug_output': False,
+    'save_test_artifacts': True,
+    'test_artifacts_dir': 'test_output_mtlx'
+}
+```
 
-### Structure Validation
+### Performance Thresholds
 
-- ✅ MaterialX version (1.39)
-- ✅ Proper XML structure
-- ✅ Required elements (materials, nodegraphs)
-- ✅ Standard surface nodes
-- ✅ Valid node connections
+```python
+PERFORMANCE_THRESHOLDS = {
+    'material_export_time': 5.0,      # seconds
+    'batch_export_time': 30.0,        # seconds per material
+    'document_creation_time': 1.0,    # seconds
+    'validation_time': 2.0,           # seconds
+    'memory_usage_mb': 512            # MB
+}
+```
 
-### Content Validation
+## 🔧 Test Framework
 
-- ✅ Node type compatibility
-- ✅ Input/output type matching
-- ✅ Texture file references (when applicable)
-- ✅ Material surface assignments
+### BlenderTestCase
 
-## ⚡ Performance Testing
+Base class for all tests that require Blender environment:
 
-### Performance Benchmarks
+```python
+from materialx_addon.tests.test_utils import BlenderTestCase
 
-- **Simple Materials**: < 1 second export time
-- **Complex Materials**: < 5 seconds export time
-- **Memory Usage**: Monitored for optimization
-- **File Size**: Validated for reasonable output
+class TestMyComponent(BlenderTestCase):
+    def setUp(self):
+        """Set up test environment."""
+        super().setUp()
+        # Create test materials, nodes, etc.
+    
+    def test(self):
+        """Run the actual test."""
+        # Test assertions
+        self.assertTrue(condition)
+        self.assertEqual(actual, expected)
+    
+    def tearDown(self):
+        """Clean up test environment."""
+        super().tearDown()
+        # Clean up test data
+```
 
-### Performance Monitoring
+### TestRunner
+
+Manages test execution and reporting:
+
+```python
+from materialx_addon.tests.test_utils import TestRunner
+
+runner = TestRunner()
+runner.add_test(TestMyComponent("MyTest"))
+results = runner.run_tests()
+summary = runner.get_summary()
+```
+
+### Test Results
+
+Test results include:
+
+- **Success/Failure status**
+- **Execution duration**
+- **Error messages**
+- **Performance metrics**
+- **Detailed logs**
+
+## 🐛 Debugging Tests
+
+### Enable Debug Output
+
+```python
+# In test_config.py
+TEST_SETTINGS['enable_debug_output'] = True
+```
+
+### Test Specific Components
+
+```python
+# Test just exporters
+from materialx_addon.tests.test_exporters import create_exporter_tests
+from materialx_addon.tests.test_utils import TestRunner
+
+runner = TestRunner()
+runner.add_tests(create_exporter_tests())
+results = runner.run_tests()
+```
+
+### Environment Validation
+
+```python
+from materialx_addon.tests.test_config import validate_test_environment
+
+env_status = validate_test_environment()
+print(f"Environment ready: {env_status['environment_ready']}")
+```
+
+## 📈 Performance Testing
+
+### Performance Metrics
 
 The test suite tracks:
 
-- Export time per material
-- Memory usage during export
-- File size of output MaterialX files
-- Node count and complexity metrics
+- **Export time** per material
+- **Memory usage** during operations
+- **Document creation time**
+- **Validation time**
+- **Batch processing time**
 
-## 📊 Test Results Output
+### Performance Thresholds
 
-Test results are printed to stdout. To save the output to a file, use command line redirection:
+Tests will fail if performance exceeds configured thresholds:
 
-```bash
-python3 run_tests.py > test_results.txt 2>&1
+```python
+# Example performance test
+def test_export_performance(self):
+    start_time = time.time()
+    result = self.exporter.export_material(self.material, output_path)
+    duration = time.time() - start_time
+    
+    threshold = get_performance_threshold('material_export_time')
+    self.assertLess(duration, threshold)
 ```
 
-### Sample Test Report
+## 🧹 Test Cleanup
 
-```
-================================================================================
-COMPREHENSIVE BLENDER MATERIALX ADDON TEST REPORT
-================================================================================
+### Automatic Cleanup
 
-SUMMARY:
-- Total Tests: 6
-- Passed: 6
-- Failed: 0
-- Success Rate: 100.0%
+Tests automatically clean up:
 
-DETAILED RESULTS:
-- addon_installation: ✓ PASSED
-- ui_functionality: ✓ PASSED
-- error_conditions: ✓ PASSED
-- material_export: ✓ PASSED
-- material_validation: ✓ PASSED
-- performance: ✓ PASSED
+- **Temporary materials**
+- **Test files**
+- **Blender objects**
+- **Temporary directories**
 
-TEST MATERIALS USED:
-- SimplePrincipled.blend: Basic Principled BSDF material
-- TextureBased.blend: Material with noise textures and color ramps
-- ComplexProcedural.blend: Complex procedural material with multiple noise layers
-- GlassMaterial.blend: Glass material with transparency and fresnel
-- MetallicMaterial.blend: Metallic material with anisotropy
-- EmissionMaterial.blend: Emission shader material
-- MixedShader.blend: Material mixing different shaders
-- MathHeavy.blend: Material with extensive math operations
+### Manual Cleanup
 
-ERROR CONDITION TESTS:
-- Emission shader (unsupported node type)
-- Fresnel node (unsupported node type)
+If tests are interrupted, manual cleanup may be needed:
 
-================================================================================
-🎉 ALL TESTS PASSED! MaterialX addon is working correctly with real-world materials.
+```python
+# Clean up test materials
+for material in bpy.data.materials:
+    if material.name.startswith("Test"):
+        bpy.data.materials.remove(material)
+
+# Clean up test objects
+for obj in bpy.data.objects:
+    if obj.name.startswith("Test"):
+        bpy.data.objects.remove(obj)
 ```
 
-## 📁 Exported Files
+## 🔄 Continuous Integration
 
-After running the test suite, all exported MaterialX files are preserved in the `test_output_mtlx/` directory. This allows you to:
+### CI/CD Integration
 
-- **Inspect the actual output** to verify export quality
-- **Identify issues** that might not be caught by validation
-- **Compare different material exports** to understand the exporter behavior
-- **Debug specific problems** by examining the generated MaterialX structure
+The test suite is designed for CI/CD pipelines:
 
-The test script will list all exported files with their sizes, making it easy to identify which materials were successfully exported.
+```yaml
+# Example GitHub Actions workflow
+- name: Run MaterialX Addon Tests
+  run: |
+    python3 run_tests.py
+  env:
+    BLENDER_VERSION: "4.0"
+```
 
-## 🔧 Troubleshooting
+### Test Artifacts
 
-### Common Test Issues
+Tests can save artifacts for analysis:
 
-**Blender Not Found:**
+- **Exported MaterialX files**
+- **Test logs**
+- **Performance reports**
+- **Screenshots**
 
-- Ensure Blender is installed and in your PATH
-- Update the Blender path in the test script if needed
+## 📝 Writing New Tests
 
-**Test Materials Missing:**
+### Adding Test Cases
 
-- Run `blender --background --python create_test_materials.py` first
-- Check that `examples/blender/` directory contains the test files
+1. **Create test class** inheriting from `BlenderTestCase`
+2. **Implement setUp()** for test preparation
+3. **Implement test()** with actual test logic
+4. **Implement tearDown()** for cleanup
+5. **Add to test module** creation function
 
-**Addon Not Installed:**
+### Example New Test
 
-- Install the addon using `python3 dev_upgrade_addon.py`
-- Verify the addon is enabled in Blender preferences
+```python
+class TestNewFeature(BlenderTestCase):
+    def setUp(self):
+        super().setUp()
+        self.material = bpy.data.materials.new(name="TestMaterial")
+        self.material.use_nodes = True
+    
+    def test(self):
+        # Test the new feature
+        result = self.new_feature.process(self.material)
+        self.assertTrue(result['success'])
+        self.assertIn('expected_field', result)
+    
+    def tearDown(self):
+        if self.material:
+            bpy.data.materials.remove(self.material)
+        super().tearDown()
 
-**Permission Errors:**
+# Add to module creation function
+def create_new_feature_tests() -> List[BlenderTestCase]:
+    return [TestNewFeature("NewFeature")]
+```
 
-- Ensure write permissions for test output directories
-- Check file system permissions for Blender addon directory
+## 🚨 Troubleshooting
 
-## 📈 Continuous Integration
+### Common Issues
 
-The test suite is designed for continuous integration:
+1. **Import Errors**: Ensure addon is deployed to Blender
+2. **MaterialX Library**: Verify MaterialX is installed
+3. **Blender Version**: Check minimum version requirements
+4. **Test Timeouts**: Increase timeout settings if needed
 
-- **Automated Testing**: Can run in headless mode
-- **Exit Codes**: Proper exit codes for CI systems
-- **Logging**: Comprehensive logging for debugging
-- **Performance Tracking**: Automated performance regression detection
+### Debug Commands
 
-## 🎯 Future Testing Enhancements
+```python
+# Check environment
+from materialx_addon.tests.test_config import validate_test_environment
+print(validate_test_environment())
 
-Planned testing improvements:
+# Check test configuration
+from materialx_addon.tests.test_config import get_test_config_summary
+print(get_test_config_summary())
 
-- **More Node Types**: Additional Blender node type coverage
-- **Complex Material Graphs**: Testing with very large node networks
-- **Texture Validation**: Comprehensive texture export testing
-- **Cross-Platform Testing**: Windows, macOS, and Linux validation
-- **Blender Version Testing**: Multiple Blender version compatibility
+# Run quick diagnostic
+exec(open('blender_test_runner.py').read())
+```
+
+## 📚 Additional Resources
+
+- **README.md**: Main project documentation
+- **CONTRIBUTING.md**: Contribution guidelines
+- **MAINTENANCE.md**: Maintenance procedures
+- **Examples/**: Example materials and workflows
+
+---
+
+For questions or issues with the test suite, please refer to the project documentation or create an issue in the project repository.

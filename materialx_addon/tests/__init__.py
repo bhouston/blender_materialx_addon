@@ -9,6 +9,9 @@ from .test_utils import *
 from .test_node_utils import *
 from .test_logging import *
 from .test_performance import *
+from .test_exporters import *
+from .test_mappers import *
+from .test_core import *
 
 __all__ = [
     'run_all_tests',

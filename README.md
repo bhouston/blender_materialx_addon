@@ -29,7 +29,7 @@ A professional-grade Blender addon to export Blender materials to MaterialX (.mt
 ### Development Installation (macOS)
 
 ```bash
-python3 dev_upgrade_addon.py
+python3 deploy.py
 ```
 
 **Important**: Run this script after making code changes to deploy updates to Blender.
@@ -99,36 +99,85 @@ The exporter returns comprehensive results including:
 
 ## 🧪 Testing
 
-Run the comprehensive test suite:
+### Comprehensive Test Suite
+
+Run the complete test suite (deploys addon and runs all tests):
 
 ```bash
 python3 run_tests.py
 ```
 
-This tests:
+### Unit Tests Only
 
-- Addon installation and UI functionality
-- Export of 8 real-world material examples
-- MaterialX file validation
-- Error handling for unsupported nodes
-- Performance testing
+Run unit tests within Blender's environment:
 
-See [TESTING.md](TESTING.md) for detailed test results and analysis.
+```bash
+python3 unit_tests.py
+```
 
-## 🔧 Development
+### Integration Tests
 
-For development setup, testing, and contribution guidelines, see [CONTRIBUTING.md](CONTRIBUTING.md).
+Run integration tests (requires Blender with addon installed):
 
-## 📋 Requirements
+```bash
+python3 integration_tests.py
+```
 
-- **Blender**: 4.0 or higher
-- **No external dependencies** (uses included MaterialX library)
+### Test Coverage
 
-## 📄 License
+The test suite includes comprehensive coverage for:
 
-MIT License. See [LICENSE](LICENSE).
+- **Exporters**: Base, Material, Batch, and Texture exporters
+- **Mappers**: Node mapping and conversion functionality
+- **Core Components**: Document management, validation, type conversion
+- **Utilities**: Node utilities, logging, performance monitoring
+- **Configuration**: Node mappings and settings
+- **Integration**: Blender and MaterialX library integration
 
-## 🙏 Acknowledgments
+### Test Structure
 
-- **MaterialX Team**: For the excellent MaterialX specification and library
-- **Blender Foundation**: For the powerful Blender platform
+```
+materialx_addon/tests/
+├── test_utils.py          # Test framework and utilities
+├── test_node_utils.py     # Node utility tests
+├── test_logging.py        # Logging system tests
+├── test_performance.py    # Performance monitoring tests
+├── test_exporters.py      # Exporter component tests
+├── test_mappers.py        # Mapper component tests
+└── test_core.py          # Core component tests
+```
+
+### Running Tests in Blender
+
+#### Quick Test Runner
+
+For quick testing in Blender's Python console:
+
+```python
+# Run the quick test runner
+exec(open('/path/to/blender_test_runner.py').read())
+
+# Or run specific functions
+run_quick_tests()                    # Basic functionality tests
+run_full_tests()                     # Complete test suite
+test_specific_component('exporters') # Test specific component
+```
+
+#### Direct Test Execution
+
+To run tests directly in Blender's Python console:
+
+```python
+# Import and run all tests
+from materialx_addon.tests import run_all_tests
+results = run_all_tests()
+print(f"Tests passed: {results['passed']}/{results['total_tests']}")
+
+# Run specific test modules
+from materialx_addon.tests.test_exporters import create_exporter_tests
+from materialx_addon.tests.test_utils import TestRunner
+
+runner = TestRunner()
+runner.add_tests(create_exporter_tests())
+results = runner.run_tests()
+```

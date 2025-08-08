@@ -153,6 +153,26 @@ class BlenderTestCase:
         if item in container:
             raise AssertionError(f"{message}: {item} found in {container}")
     
+    def assertIsInstance(self, obj: Any, cls: type, message: str = "Object is not instance of expected class"):
+        """Assert that an object is an instance of a specific class."""
+        if not isinstance(obj, cls):
+            raise AssertionError(message)
+    
+    def assertIs(self, first: Any, second: Any, message: str = "Objects are not the same"):
+        """Assert that two objects are the same (identity comparison)."""
+        if first is not second:
+            raise AssertionError(message)
+    
+    def assertGreater(self, first: Any, second: Any, message: str = "First value is not greater than second"):
+        """Assert that first value is greater than second value."""
+        if not first > second:
+            raise AssertionError(message)
+    
+    def assertLess(self, first: Any, second: Any, message: str = "First value is not less than second"):
+        """Assert that first value is less than second value."""
+        if not first < second:
+            raise AssertionError(message)
+    
     def assertRaises(self, exception_type: type, callable_obj: Callable, *args, **kwargs):
         """Assert that a callable raises a specific exception."""
         try:
@@ -298,15 +318,52 @@ def run_all_tests() -> Dict[str, Any]:
     """
     runner = TestRunner()
     
-    # Import and add all test cases
-    from .test_node_utils import create_node_utils_tests
-    from .test_logging import create_logging_tests
-    from .test_performance import create_performance_tests
+    # Import test configuration
+    from .test_config import is_test_category_enabled, get_test_modules
     
-    # Add test cases
-    runner.add_tests(create_node_utils_tests())
-    runner.add_tests(create_logging_tests())
-    runner.add_tests(create_performance_tests())
+    # Import and add test cases based on configuration
+    if is_test_category_enabled('unit_tests'):
+        try:
+            from .test_node_utils import create_node_utils_tests
+            runner.add_tests(create_node_utils_tests())
+        except ImportError as e:
+            logger = MaterialXLogger("TestRunner")
+            logger.warning(f"Could not import node_utils tests: {e}")
+        
+        try:
+            from .test_logging import create_logging_tests
+            runner.add_tests(create_logging_tests())
+        except ImportError as e:
+            logger = MaterialXLogger("TestRunner")
+            logger.warning(f"Could not import logging tests: {e}")
+        
+        try:
+            from .test_performance import create_performance_tests
+            runner.add_tests(create_performance_tests())
+        except ImportError as e:
+            logger = MaterialXLogger("TestRunner")
+            logger.warning(f"Could not import performance tests: {e}")
+        
+        try:
+            from .test_exporters import create_exporter_tests
+            runner.add_tests(create_exporter_tests())
+        except ImportError as e:
+            logger = MaterialXLogger("TestRunner")
+            logger.warning(f"Could not import exporter tests: {e}")
+        
+        try:
+            from .test_mappers import create_mapper_tests
+            runner.add_tests(create_mapper_tests())
+        except ImportError as e:
+            logger = MaterialXLogger("TestRunner")
+            logger.warning(f"Could not import mapper tests: {e}")
+        
+        try:
+            from .test_core import create_core_tests
+            runner.add_tests(create_core_tests())
+        except ImportError as e:
+            logger = MaterialXLogger("TestRunner")
+            logger.warning(f"Could not import core tests: {e}")
     
     # Run tests
     runner.run_tests()
