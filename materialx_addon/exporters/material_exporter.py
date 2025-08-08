@@ -106,6 +106,7 @@ class MaterialExporter(BaseExporter):
             
             # Track processed nodes to avoid duplicates
             processed_nodes = set()
+            unsupported_nodes = []
             
             # Export each node
             for node in node_tree.nodes:
@@ -115,7 +116,12 @@ class MaterialExporter(BaseExporter):
                     continue
                 
                 if not self.node_registry.can_map_node(node):
-                    self.logger.warning(f"Unsupported node type: {node.type}")
+                    unsupported_nodes.append({
+                        'name': node.name,
+                        'type': node.type,
+                        'bl_idname': node.bl_idname
+                    })
+                    self.logger.warning(f"Unsupported node type: {node.type} ({node.name})")
                     processed_nodes.add(node.name)  # Mark as processed to avoid reprocessing
                     continue
                 
@@ -134,6 +140,13 @@ class MaterialExporter(BaseExporter):
                     self.logger.error(f"Failed to export node {node.name}: {e}")
                     processed_nodes.add(node.name)  # Mark as processed to avoid infinite retries
                     continue
+            
+            # If we have unsupported nodes, fail the export
+            if unsupported_nodes:
+                self.logger.error(f"Export failed: Found {len(unsupported_nodes)} unsupported nodes")
+                # Store unsupported nodes for error reporting
+                self.unsupported_nodes = unsupported_nodes
+                return False
             
             # Connect nodes
             success = self._connect_nodes(node_tree, document)

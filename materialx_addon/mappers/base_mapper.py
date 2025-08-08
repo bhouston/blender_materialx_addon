@@ -177,7 +177,32 @@ class BaseNodeMapper(ABC):
             return None
         
         input_socket = blender_node.inputs[input_name]
-        return getattr(input_socket, 'default_value', None)
+        default_value = getattr(input_socket, 'default_value', None)
+        
+        # Handle Blender array values properly
+        if default_value is not None:
+            if hasattr(default_value, '__len__') and not isinstance(default_value, str):
+                # Convert Blender arrays to Python lists
+                try:
+                    if len(default_value) == 3:
+                        return [float(default_value[0]), float(default_value[1]), float(default_value[2])]
+                    elif len(default_value) == 4:
+                        return [float(default_value[0]), float(default_value[1]), float(default_value[2]), float(default_value[3])]
+                    elif len(default_value) == 2:
+                        return [float(default_value[0]), float(default_value[1])]
+                    else:
+                        return [float(v) for v in default_value]
+                except (TypeError, ValueError, IndexError):
+                    # If conversion fails, return as is
+                    return default_value
+            else:
+                # Single value
+                try:
+                    return float(default_value)
+                except (TypeError, ValueError):
+                    return default_value
+        
+        return default_value
     
     def _get_input_connection(self, blender_node: bpy.types.Node, input_name: str,
                              exported_nodes: Dict[str, str]) -> Optional[str]:
@@ -220,14 +245,94 @@ class BaseNodeMapper(ABC):
             NodeMappingError: If node creation fails
         """
         try:
-            # Ensure unique node name
-            unique_name = self._get_unique_node_name(document, node_name, node_type)
+            # Generate a proper MaterialX node name based on the node type
+            materialx_name = self._generate_materialx_node_name(node_name, node_type)
+            unique_name = self._get_unique_node_name(document, materialx_name, node_type)
             
             node = document.addNode(unique_name, node_type, category)
             self.logger.debug(f"Created MaterialX node: {unique_name} ({node_type})")
             return node
         except Exception as e:
             raise NodeMappingError(node_type, node_name, "node_creation", e)
+    
+    def _generate_materialx_node_name(self, blender_name: str, materialx_type: str) -> str:
+        """
+        Generate a proper MaterialX node name based on the node type.
+        
+        Args:
+            blender_name: Original Blender node name
+            materialx_type: MaterialX node type
+            
+        Returns:
+            Proper MaterialX node name
+        """
+        # Map common MaterialX node types to proper names
+        type_to_name = {
+            'standard_surface': 'standard_surface',
+            'mix': 'mix',
+            'add': 'add',
+            'subtract': 'subtract',
+            'multiply': 'multiply',
+            'divide': 'divide',
+            'modulo': 'modulo',
+            'ifgreater': 'ifgreater',
+            'texcoord': 'texcoord',
+            'noise2d': 'noise2d',
+            'checker2d': 'checker2d',
+            'ramp2d': 'ramp2d',
+            'brick2d': 'brick2d',
+            'voronoi2d': 'voronoi2d',
+            'wave2d': 'wave2d',
+            'musgrave2d': 'musgrave2d',
+            'image': 'image',
+            'constant': 'constant',
+            'separate3': 'separate3',
+            'combine3': 'combine3',
+            'invert': 'invert',
+            'normalmap': 'normalmap',
+            'bump': 'bump',
+            'place2d': 'place2d',
+            'layer': 'layer',
+            'hsvtorgb': 'hsvtorgb',
+            'rgbtohsv': 'rgbtohsv',
+            'ramplr': 'ramplr',
+            'position': 'position',
+            'absval': 'absval',
+            'sign': 'sign',
+            'floor': 'floor',
+            'ceil': 'ceil',
+            'round': 'round',
+            'power': 'power',
+            'safepower': 'safepower',
+            'sin': 'sin',
+            'cos': 'cos',
+            'tan': 'tan',
+            'asin': 'asin',
+            'acos': 'acos',
+            'atan2': 'atan2',
+            'sqrt': 'sqrt',
+            'ln': 'ln',
+            'exp': 'exp',
+            'clamp': 'clamp',
+            'min': 'min',
+            'max': 'max',
+            'normalize': 'normalize',
+            'magnitude': 'magnitude',
+            'distance': 'distance',
+            'dotproduct': 'dotproduct',
+            'crossproduct': 'crossproduct',
+            'transformpoint': 'transformpoint',
+            'transformvector': 'transformvector',
+            'transformnormal': 'transformnormal'
+        }
+        
+        # Use the MaterialX type name if available, otherwise use a sanitized version of the Blender name
+        if materialx_type in type_to_name:
+            return type_to_name[materialx_type]
+        else:
+            # Sanitize the Blender name for MaterialX
+            sanitized = blender_name.replace(' ', '_').replace('(', '').replace(')', '').replace('.', '_')
+            return sanitized.lower()
     
     def _get_unique_node_name(self, document: mx.Document, base_name: str, node_type: str) -> str:
         """
@@ -284,8 +389,27 @@ class BaseNodeMapper(ABC):
             input_port = materialx_node.addInput(input_name, input_type)
             
             if value is not None:
+                # Handle different value types properly
                 if isinstance(value, (list, tuple)):
-                    input_port.setValueString(" ".join(str(v) for v in value))
+                    # For arrays (like colors), join with commas
+                    if len(value) <= 4:  # color3, color4, vector2, vector3, vector4
+                        input_port.setValueString(", ".join(str(v) for v in value))
+                    else:
+                        input_port.setValueString(" ".join(str(v) for v in value))
+                elif hasattr(value, '__str__') and '<bpy_' in str(value):
+                    # Handle Blender array objects that haven't been properly converted
+                    self.logger.warning(f"Unconverted Blender value: {value}")
+                    # Set a default value based on the input type
+                    if input_type == 'color3':
+                        input_port.setValueString("0.5, 0.5, 0.5")
+                    elif input_type == 'color4':
+                        input_port.setValueString("0.5, 0.5, 0.5, 1.0")
+                    elif input_type == 'vector3':
+                        input_port.setValueString("0.0, 0.0, 0.0")
+                    elif input_type == 'vector2':
+                        input_port.setValueString("0.0, 0.0")
+                    else:
+                        input_port.setValueString("0.0")
                 else:
                     input_port.setValueString(str(value))
             

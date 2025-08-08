@@ -10,6 +10,7 @@ import bpy
 import MaterialX as mx
 from .base_mapper import BaseNodeMapper
 from ..config.node_mappings import NODE_MAPPING
+from ..utils.exceptions import UnsupportedNodeError
 
 
 class UtilityMapper(BaseNodeMapper):
@@ -22,10 +23,12 @@ class UtilityMapper(BaseNodeMapper):
     def __init__(self, logger=None):
         super().__init__(logger)
         self.supported_node_types = [
-            'RGB', 'VALUE', 'TEX_COORD', 'GEOMETRY', 'OBJECT_INFO', 'LIGHT_PATH',
+            'RGB', 'VALUE', 'TEX_COORD', 'GEOMETRY', 'NEW_GEOMETRY', 'OBJECT_INFO', 'LIGHT_PATH',
             'HSV_TO_RGB', 'RGB_TO_HSV', 'LUMINANCE', 'CONTRAST', 'SATURATE', 'GAMMA',
             'SEPARATE_XYZ', 'COMBINE_XYZ', 'ROUGHNESS_ANISOTROPY', 'ARTISTIC_IOR',
-            'ADD_SHADER', 'MULTIPLY_SHADER'
+            'ADD_SHADER', 'MULTIPLY_SHADER', 'MIX_SHADER', 'MIX_RGB', 'VALTORGB',
+            'OUTPUT_MATERIAL', 'MIX', 'INVERT', 'SEPARATE_COLOR', 'COMBINE_COLOR',
+            'NORMAL_MAP', 'BUMP', 'MAPPING', 'LAYER_WEIGHT', 'CURVE_RGB', 'CLAMP', 'MAP_RANGE'
         ]
     
     def can_map_node(self, blender_node: bpy.types.Node) -> bool:
@@ -72,6 +75,16 @@ class UtilityMapper(BaseNodeMapper):
             self._map_special_utility_node(blender_node, materialx_node)
         elif blender_node.type in ['ADD_SHADER', 'MULTIPLY_SHADER']:
             self._map_shader_operation_node(blender_node, materialx_node)
+        elif blender_node.type in ['MIX', 'MIX_RGB']:
+            self._map_mix_node(blender_node, materialx_node)
+        elif blender_node.type == 'VALTORGB':
+            self._map_color_ramp_node(blender_node, materialx_node)
+        elif blender_node.type == 'OUTPUT_MATERIAL':
+            self._map_material_output_node(blender_node, materialx_node)
+        elif blender_node.type in ['INVERT', 'SEPARATE_COLOR', 'COMBINE_COLOR']:
+            self._map_color_operation_node(blender_node, materialx_node)
+        elif blender_node.type in ['NORMAL_MAP', 'BUMP', 'MAPPING', 'LAYER_WEIGHT', 'CURVE_RGB', 'CLAMP', 'MAP_RANGE']:
+            self._map_generic_utility_node(blender_node, materialx_node)
         else:
             # Generic mapping for other utility nodes
             self._map_generic_utility_node(blender_node, materialx_node)
@@ -316,3 +329,46 @@ class UtilityMapper(BaseNodeMapper):
             'outg': 'outg',
             'outb': 'outb'
         }
+    
+    def _map_mix_node(self, blender_node: bpy.types.Node, materialx_node: Any):
+        """Map a Blender Mix node to MaterialX mix."""
+        # Map inputs
+        self._map_input(blender_node, materialx_node, 'A', 'fg')
+        self._map_input(blender_node, materialx_node, 'B', 'bg')
+        self._map_input(blender_node, materialx_node, 'Factor', 'mix')
+        
+        # Also handle alternative input names
+        self._map_input(blender_node, materialx_node, 'Color1', 'fg')
+        self._map_input(blender_node, materialx_node, 'Color2', 'bg')
+        self._map_input(blender_node, materialx_node, 'Fac', 'mix')
+        
+        # Add output
+        self._add_output(materialx_node, 'out', 'color3')
+    
+    def _map_color_ramp_node(self, blender_node: bpy.types.Node, materialx_node: Any):
+        """Map a Blender Color Ramp node to MaterialX ramplr."""
+        # Color Ramp maps to ramplr (left-to-right ramp)
+        # For now, create a simple ramp - in a full implementation, 
+        # we'd need to extract the ramp stops and positions
+        self._add_output(materialx_node, 'out', 'color3')
+        
+        # Set default values for ramp
+        materialx_node.setInputValue('low', 0.0)
+        materialx_node.setInputValue('high', 1.0)
+    
+    def _map_material_output_node(self, blender_node: bpy.types.Node, materialx_node: Any):
+        """Map a Blender Material Output node to MaterialX."""
+        # Material Output nodes are typically not exported to MaterialX
+        # as they're Blender-specific. We'll create a simple pass-through.
+        self._add_output(materialx_node, 'out', 'surfaceshader')
+        
+        # Map the Surface input
+        self._map_input(blender_node, materialx_node, 'Surface', 'in')
+    
+    def _map_input(self, blender_node: bpy.types.Node, materialx_node: Any, 
+                   blender_input_name: str, materialx_input_name: str):
+        """Map a Blender input to a MaterialX input."""
+        if self._has_input(blender_node, blender_input_name):
+            input_value = self._get_input_value(blender_node, blender_input_name)
+            input_type = self._get_input_type(blender_node, blender_input_name)
+            self._add_input(materialx_node, materialx_input_name, input_type, input_value)

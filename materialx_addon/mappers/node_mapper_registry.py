@@ -222,8 +222,10 @@ class NodeMapperRegistry:
                 'TEX_BRICK': ProceduralTextureMapper,
                 'TEX_GRADIENT': ProceduralTextureMapper,
                 'CHECKER_TEXTURE': ProceduralTextureMapper,
+                'TEX_CHECKER': ProceduralTextureMapper,  # Alternative name for Checker Texture
                 'MATH': MathMapper,
                 'VECTOR_MATH': VectorMathMapper,
+                'VECT_MATH': VectorMathMapper,  # Alternative name for Vector Math
                 'MIX': UtilityMapper,
                 'MIX_RGB': UtilityMapper,
                 'INVERT': UtilityMapper,
@@ -237,6 +239,7 @@ class NodeMapperRegistry:
                 'CLAMP': UtilityMapper,
                 'MAP_RANGE': UtilityMapper,
                 'GEOMETRY': UtilityMapper,
+                'NEW_GEOMETRY': UtilityMapper,  # Alternative name for Geometry
                 'OBJECT_INFO': UtilityMapper,
                 'LIGHT_PATH': UtilityMapper,
                 'HSV_TO_RGB': UtilityMapper,
@@ -251,9 +254,12 @@ class NodeMapperRegistry:
                 'ARTISTIC_IOR': UtilityMapper,
                 'ADD_SHADER': UtilityMapper,
                 'MULTIPLY_SHADER': UtilityMapper,
+                'MIX_SHADER': UtilityMapper,  # Mix Shader
                 'TEX_COORD': UtilityMapper,
                 'RGB': UtilityMapper,
-                'VALUE': UtilityMapper
+                'VALUE': UtilityMapper,
+                'VALTORGB': UtilityMapper,  # Color Ramp
+                'OUTPUT_MATERIAL': UtilityMapper,  # Material Output (should be ignored but mapped)
             }
             
             self.register_mappers(default_mappers)

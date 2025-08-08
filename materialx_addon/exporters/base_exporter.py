@@ -35,6 +35,7 @@ class BaseExporter(ABC):
         self.exported_nodes: Dict[str, str] = {}
         self.exported_materials: Dict[str, str] = {}
         self.exported_textures: Dict[str, str] = {}
+        self.unsupported_nodes: List[Dict[str, str]] = []
     
     @abstractmethod
     def can_export(self, blender_object: bpy.types.Object) -> bool:
@@ -252,11 +253,21 @@ class BaseExporter(ABC):
             'exported_nodes': self.exported_nodes.copy(),
             'exported_textures': self.exported_textures.copy(),
             'export_options': self.export_options.copy(),
+            'unsupported_nodes': self.unsupported_nodes.copy(),
             'document_info': {
                 name: self.document_manager.get_document_info(name)
                 for name in self.document_manager.list_documents()
             }
         }
+    
+    def get_unsupported_nodes(self) -> List[Dict[str, str]]:
+        """
+        Get list of unsupported nodes from the last export operation.
+        
+        Returns:
+            List of unsupported node dictionaries
+        """
+        return self.unsupported_nodes.copy()
     
     def cleanup(self):
         """Clean up resources."""

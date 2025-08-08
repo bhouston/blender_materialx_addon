@@ -111,7 +111,7 @@ class ProceduralTextureMapper(TextureMapper):
         super().__init__(logger)
         self.supported_node_types = [
             'TEX_NOISE', 'TEX_VORONOI', 'TEX_WAVE', 'TEX_MUSGRAVE',
-            'TEX_BRICK', 'TEX_GRADIENT', 'CHECKER_TEXTURE'
+            'TEX_BRICK', 'TEX_GRADIENT', 'CHECKER_TEXTURE', 'TEX_CHECKER'
         ]
         self.materialx_node_type = "noise2d"  # Default, will be overridden
         self.materialx_category = "texture2d"
@@ -143,7 +143,7 @@ class ProceduralTextureMapper(TextureMapper):
             self._add_brick_inputs(materialx_node, blender_node)
         elif blender_node.type == 'TEX_GRADIENT':
             self._add_gradient_inputs(materialx_node, blender_node)
-        elif blender_node.type == 'CHECKER_TEXTURE':
+        elif blender_node.type in ['CHECKER_TEXTURE', 'TEX_CHECKER']:
             self._add_checker_inputs(materialx_node, blender_node)
         
         # Add outputs
@@ -160,7 +160,8 @@ class ProceduralTextureMapper(TextureMapper):
             'TEX_MUSGRAVE': 'musgrave2d',
             'TEX_BRICK': 'brick2d',
             'TEX_GRADIENT': 'ramp2d',
-            'CHECKER_TEXTURE': 'checker2d'
+            'CHECKER_TEXTURE': 'checker2d',
+            'TEX_CHECKER': 'checker2d'
         }
         return type_mapping.get(blender_node_type, 'noise2d')
     

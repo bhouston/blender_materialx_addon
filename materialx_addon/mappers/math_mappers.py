@@ -113,7 +113,7 @@ class VectorMathMapper(BaseNodeMapper):
     
     def __init__(self, logger=None):
         super().__init__(logger)
-        self.supported_node_types = ['VECTOR_MATH']
+        self.supported_node_types = ['VECTOR_MATH', 'VECT_MATH']
         self.materialx_node_type = "add"  # Default, will be overridden
         self.materialx_category = "math"
     

@@ -390,16 +390,22 @@ def unregister():
     
     logger.info("🎨 MaterialX Export v(1, 1, 4) unloaded")
 
-# Backward compatibility functions for existing tests
+# Modern API functions for direct access to the new architecture
 def export_material_to_materialx(material: bpy.types.Material, 
                                 output_path: str, 
                                 logger=None,
                                 options: Dict = None) -> dict:
     """
-    Backward compatibility function for existing tests.
+    Export a Blender material to MaterialX format using the new architecture.
     
-    This function maintains compatibility with existing test scripts
-    while using the new Phase 2 architecture internally.
+    Args:
+        material: The Blender material to export
+        output_path: Path where the MaterialX file should be saved
+        logger: Optional logger instance
+        options: Export options dictionary
+        
+    Returns:
+        Dictionary with export results including success status and any errors
     """
     try:
         # Create a temporary object for the material
@@ -421,10 +427,17 @@ def export_material_to_materialx(material: bpy.types.Material,
                 'material_name': material.name
             }
         else:
+            # Get unsupported nodes information
+            unsupported_nodes = exporter.get_unsupported_nodes()
+            error_msg = 'Export failed'
+            if unsupported_nodes:
+                error_msg = f'Export failed: Found {len(unsupported_nodes)} unsupported nodes'
+            
             return {
                 'success': False,
-                'error': 'Export failed',
-                'material_name': material.name
+                'error': error_msg,
+                'material_name': material.name,
+                'unsupported_nodes': unsupported_nodes
             }
             
     except Exception as e:
@@ -438,10 +451,15 @@ def export_material_to_materialx(material: bpy.types.Material,
 
 def export_all_materials_to_materialx(output_directory: str, logger, options: Dict = None) -> Dict[str, bool]:
     """
-    Backward compatibility function for batch export.
+    Export all materials in the scene to MaterialX format using the new architecture.
     
-    This function maintains compatibility with existing test scripts
-    while using the new Phase 2 architecture internally.
+    Args:
+        output_directory: Directory where MaterialX files should be saved
+        logger: Optional logger instance
+        options: Export options dictionary
+        
+    Returns:
+        Dictionary mapping material names to success status
     """
     try:
         # Create batch exporter and export
